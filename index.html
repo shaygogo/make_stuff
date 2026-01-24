@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Migrate to Pipedrive API v2</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#814ef6",
+                        "primary-hover": "#6d39e0",
+                        "background-light": "#f9fafa",
+                        "background-dark": "#0f1115",
+                        "surface-dark": "#16181d",
+                        "border-dark": "#2d333d",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.375rem",
+                        "lg": "0.5rem",
+                        "xl": "1rem",
+                        "2xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style type="text/tailwindcss">
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        .upload-pattern {
+            background-image: radial-gradient(circle at 2px 2px, #814ef615 1px, transparent 0);
+            background-size: 24px 24px;
+        }
+        input[type="radio"]:checked + label {
+            @apply border-primary bg-primary/5 text-primary ring-2 ring-primary/20;
+        }
+        #connection-id-field {
+            display: none;
+        }
+        #update-connection:checked ~ div #connection-id-field {
+            display: block;
+        }
+        #update-connection:checked + label {
+            @apply border-primary bg-primary/5 text-primary;
+        }
+        .spinner {
+            border: 3px solid rgba(129, 78, 246, 0.2);
+            border-top: 3px solid #814ef6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+
+<body
+    class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen selection:bg-primary/30 flex flex-col items-center justify-center">
+    <main class="w-full max-w-3xl px-6 py-12 flex flex-col gap-8">
+        <!-- Header -->
+        <div class="text-center space-y-4">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-2">
+                <span class="material-symbols-outlined text-4xl text-primary">swap_calls</span>
+            </div>
+            <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 dark:text-white">
+                Migrate to Pipedrive API v2
+            </h2>
+            <p class="text-slate-500 dark:text-slate-400 text-lg max-w-xl mx-auto">
+                Easily update your automation scenario blueprints to support the new Pipedrive API v2 infrastructure.
+            </p>
+        </div>
+
+        <!-- Upload Area -->
+        <div
+            class="bg-white dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-border-dark p-2 shadow-xl shadow-primary/5">
+            <div id="drop-zone"
+                class="min-h-[280px] rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-primary transition-all flex flex-col items-center justify-center upload-pattern group cursor-pointer bg-slate-50/50 dark:bg-transparent">
+                <div class="flex flex-col items-center text-center px-6">
+                    <div
+                        class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                        <span class="material-symbols-outlined text-4xl text-primary">upload_file</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-1">Drop your blueprint .json here</h3>
+                    <p class="text-slate-500 dark:text-slate-400 mb-6 text-sm">
+                        Select the exported JSON file from your scenario.
+                    </p>
+                    <button id="file-btn"
+                        class="bg-primary hover:bg-primary-hover text-white font-bold py-3 px-8 rounded-xl flex items-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-[0.98]">
+                        <span class="material-symbols-outlined">add_circle</span>
+                        Select File
+                    </button>
+                    <input type="file" id="file-input" accept=".json" class="hidden">
+                    <p id="file-name" class="mt-4 text-sm text-slate-400 hidden"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connection Options -->
+        <div
+            class="bg-white dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-border-dark p-8 shadow-sm">
+            <div class="flex flex-col gap-6">
+                <div>
+                    <h4 class="text-xs font-bold tracking-widest uppercase text-slate-400 mb-4 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary text-base">settings</span>
+                        Connection Handling
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="relative">
+                            <input checked class="sr-only" id="preserve-connection" name="connection_mode" type="radio"
+                                value="preserve" />
+                            <label
+                                class="flex flex-col p-4 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm font-medium h-full"
+                                for="preserve-connection">
+                                <span class="flex items-center gap-2 mb-1">
+                                    <span class="material-symbols-outlined text-lg">link</span>
+                                    Preserve Original Connections
+                                </span>
+                                <span class="text-xs text-slate-500 font-normal">Maintain existing connection IDs in the
+                                    migrated file.</span>
+                            </label>
+                        </div>
+                        <div class="relative">
+                            <input class="sr-only peer" id="update-connection" name="connection_mode" type="radio"
+                                value="update" />
+                            <label
+                                class="flex flex-col p-4 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm font-medium h-full peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:text-primary"
+                                for="update-connection">
+                                <span class="flex items-center gap-2 mb-1">
+                                    <span class="material-symbols-outlined text-lg">sync_alt</span>
+                                    Update to New Connection
+                                </span>
+                                <span class="text-xs text-slate-500 font-normal">Swap old module connections with a
+                                    specific new ID.</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="hidden peer-checked:block space-y-2" id="connection-id-field">
+                    <label class="text-xs font-bold uppercase text-slate-400" for="new_connection_id">New Connection
+                        ID</label>
+                    <div class="relative group">
+                        <span
+                            class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">fingerprint</span>
+                        <input
+                            class="w-full pl-12 pr-4 py-3.5 bg-slate-50 dark:bg-background-dark border border-slate-200 dark:border-border-dark rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                            id="new_connection_id" placeholder="Enter the new Pipedrive connection ID..." type="text" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-col items-center gap-4">
+            <button id="migrate-btn"
+                class="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-4 px-10 rounded-xl flex items-center justify-center gap-2 shadow-xl transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed">
+                <span class="material-symbols-outlined">rocket_launch</span>
+                <span id="btn-text">Migrate Blueprint</span>
+                <div class="spinner hidden" id="btn-spinner"></div>
+            </button>
+            <button
+                class="flex items-center gap-2 text-slate-400 hover:text-primary transition-colors text-sm font-medium"
+                onclick="alert('To find your Connection ID in Make.com:\\n\\n1. Click on any Pipedrive module in your scenario\\n2. Click on the connection dropdown\\n3. Right-click and choose \\\'Inspect Element\\\'\\n4. Look for the connection ID in the HTML\\n\\nAlternatively, contact your Make.com administrator.')">
+                <span class="material-symbols-outlined text-lg">info</span>
+                How to find my Connection ID?
+            </button>
+        </div>
+
+        <!-- Error/Success Message -->
+        <div id="message" class="hidden rounded-xl p-4 text-sm font-medium"></div>
+    </main>
+
+    <script>
+        let selectedFile = null;
+
+        // Elements
+        const fileInput = document.getElementById('file-input');
+        const fileBtn = document.getElementById('file-btn');
+        const dropZone = document.getElementById('drop-zone');
+        const fileName = document.getElementById('file-name');
+        const migrateBtn = document.getElementById('migrate-btn');
+        const btnText = document.getElementById('btn-text');
+        const btnSpinner = document.getElementById('btn-spinner');
+        const message = document.getElementById('message');
+        const updateRadio = document.getElementById('update-connection');
+        const preserveRadio = document.getElementById('preserve-connection');
+        const idField = document.getElementById('connection-id-field');
+        const newConnectionInput = document.getElementById('new_connection_id');
+
+        // File selection
+        fileBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFileSelect(e.target.files[0]);
+        });
+
+        // Drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-primary', 'bg-primary/5');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-primary', 'bg-primary/5');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-primary', 'bg-primary/5');
+            handleFileSelect(e.dataTransfer.files[0]);
+        });
+
+        function handleFileSelect(file) {
+            if (!file) return;
+
+            if (!file.name.endsWith('.json')) {
+                showMessage('Please select a valid JSON file', 'error');
+                return;
+            }
+
+            selectedFile = file;
+            fileName.textContent = `Selected: ${file.name}`;
+            fileName.classList.remove('hidden');
+            showMessage('File loaded successfully! Configure options and click "Migrate Blueprint"', 'success');
+        }
+
+        // Connection mode toggle
+        function toggleField() {
+            if (updateRadio.checked) {
+                idField.style.display = 'block';
+            } else {
+                idField.style.display = 'none';
+            }
+        }
+        updateRadio.addEventListener('change', toggleField);
+        preserveRadio.addEventListener('change', toggleField);
+
+        // Migration
+        migrateBtn.addEventListener('click', async () => {
+            if (!selectedFile) {
+                showMessage('Please select a JSON blueprint file first', 'error');
+                return;
+            }
+
+            const connectionMode = updateRadio.checked ? 'update' : 'preserve';
+            const connectionId = newConnectionInput.value.trim();
+
+            if (connectionMode === 'update' && !connectionId) {
+                showMessage('Please enter a new Connection ID', 'error');
+                return;
+            }
+
+            // Disable button and show spinner
+            migrateBtn.disabled = true;
+            btnText.textContent = 'Migrating...';
+            btnSpinner.classList.remove('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('connection_mode', connectionMode);
+                if (connectionMode === 'update') {
+                    formData.append('new_connection_id', connectionId);
+                }
+
+                const response = await fetch('/api/migrate', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Migration failed');
+                }
+
+                // Download the migrated file
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = selectedFile.name.replace('.json', '_v2_migrated.json');
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                showMessage('Migration successful! Your file has been downloaded.', 'success');
+            } catch (error) {
+                showMessage(`Error: ${error.message}`, 'error');
+            } finally {
+                // Re-enable button
+                migrateBtn.disabled = false;
+                btnText.textContent = 'Migrate Blueprint';
+                btnSpinner.classList.add('hidden');
+            }
+        });
+
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.classList.remove('hidden', 'bg-red-500/10', 'text-red-400', 'border-red-500/20', 'bg-green-500/10', 'text-green-400', 'border-green-500/20');
+
+            if (type === 'error') {
+                message.classList.add('bg-red-500/10', 'text-red-400', 'border', 'border-red-500/20');
+            } else {
+                message.classList.add('bg-green-500/10', 'text-green-400', 'border', 'border-green-500/20');
+            }
+
+            message.classList.remove('hidden');
+
+            // Auto-hide success messages after 5 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    message.classList.add('hidden');
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+
+</html>
