@@ -74,13 +74,13 @@
 
 <body
     class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen selection:bg-primary/30 flex flex-col items-center justify-center">
-    <main class="w-full max-w-3xl px-6 py-12 flex flex-col gap-8">
+    <main class="w-full max-w-2xl px-6 py-6 flex flex-col gap-6">
         <!-- Header -->
-        <div class="text-center space-y-4">
-            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-2">
-                <span class="material-symbols-outlined text-4xl text-primary">swap_calls</span>
+        <div class="text-center space-y-3">
+            <div class="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-primary/10 mb-1">
+                <span class="material-symbols-outlined text-3xl text-primary">swap_calls</span>
             </div>
-            <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h2 class="text-4xl font-bold tracking-tight text-slate-900 dark:text-white">
                 Migrate to Pipedrive API v2
             </h2>
             <p class="text-slate-500 dark:text-slate-400 text-lg max-w-xl mx-auto">
@@ -90,21 +90,21 @@
 
         <!-- Upload Area -->
         <div
-            class="bg-white dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-border-dark p-2 shadow-xl shadow-primary/5">
+            class="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-border-dark p-2 shadow-lg shadow-primary/5">
             <div id="drop-zone"
-                class="min-h-[280px] rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-primary transition-all flex flex-col items-center justify-center upload-pattern group cursor-pointer bg-slate-50/50 dark:bg-transparent">
+                class="min-h-[180px] rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-primary transition-all flex flex-col items-center justify-center upload-pattern group cursor-pointer bg-slate-50/50 dark:bg-transparent">
                 <div class="flex flex-col items-center text-center px-6">
                     <div
-                        class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                        <span class="material-symbols-outlined text-4xl text-primary">upload_file</span>
+                        class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                        <span class="material-symbols-outlined text-3xl text-primary">upload_file</span>
                     </div>
-                    <h3 class="text-xl font-bold mb-1">Drop your blueprint .json here</h3>
-                    <p class="text-slate-500 dark:text-slate-400 mb-6 text-sm">
-                        Select the exported JSON file from your scenario.
+                    <h3 class="text-xl font-bold mb-1">Drop blueprint here</h3>
+                    <p class="text-slate-500 dark:text-slate-400 mb-4 text-sm">
+                        Select exported JSON file.
                     </p>
                     <button id="file-btn"
-                        class="bg-primary hover:bg-primary-hover text-white font-bold py-3 px-8 rounded-xl flex items-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-[0.98]">
-                        <span class="material-symbols-outlined">add_circle</span>
+                        class="bg-primary hover:bg-primary-hover text-white font-bold py-2.5 px-7 rounded-lg flex items-center gap-2 shadow-md shadow-primary/10 transition-all active:scale-[0.98] text-sm">
+                        <span class="material-symbols-outlined text-xl">add_circle</span>
                         Select File
                     </button>
                     <input type="file" id="file-input" accept=".json" class="hidden">
@@ -115,8 +115,8 @@
 
         <!-- Connection Options -->
         <div
-            class="bg-white dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-border-dark p-8 shadow-sm">
-            <div class="flex flex-col gap-6">
+            class="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-border-dark p-5 shadow-sm">
+            <div class="flex flex-col gap-4">
                 <div>
                     <h4 class="text-xs font-bold tracking-widest uppercase text-slate-400 mb-4 flex items-center gap-2">
                         <span class="material-symbols-outlined text-primary text-base">settings</span>
@@ -127,42 +127,41 @@
                             <input checked class="sr-only" id="preserve-connection" name="connection_mode" type="radio"
                                 value="preserve" />
                             <label
-                                class="flex flex-col p-4 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm font-medium h-full"
+                                class="flex flex-col p-4 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm font-medium h-full"
                                 for="preserve-connection">
                                 <span class="flex items-center gap-2 mb-1">
                                     <span class="material-symbols-outlined text-lg">link</span>
-                                    Preserve Original Connections
+                                    Preserve Connections
                                 </span>
-                                <span class="text-xs text-slate-500 font-normal">Maintain existing connection IDs in the
-                                    migrated file.</span>
+                                <span class="text-xs text-slate-500 font-normal leading-tight">Maintain original
+                                    IDs.</span>
                             </label>
                         </div>
                         <div class="relative">
                             <input class="sr-only peer" id="update-connection" name="connection_mode" type="radio"
                                 value="update" />
                             <label
-                                class="flex flex-col p-4 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm font-medium h-full peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:text-primary"
+                                class="flex flex-col p-4 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm font-medium h-full peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:text-primary"
                                 for="update-connection">
                                 <span class="flex items-center gap-2 mb-1">
                                     <span class="material-symbols-outlined text-lg">sync_alt</span>
-                                    Update to New Connection
+                                    Update Connection
                                 </span>
-                                <span class="text-xs text-slate-500 font-normal">Swap old module connections with a
-                                    specific new ID.</span>
+                                <span class="text-xs text-slate-500 font-normal leading-tight">Swap with a new
+                                    ID.</span>
                             </label>
                         </div>
                     </div>
                 </div>
 
                 <div class="hidden peer-checked:block space-y-2" id="connection-id-field">
-                    <label class="text-xs font-bold uppercase text-slate-400" for="new_connection_id">New Connection
-                        ID</label>
+                    <label class="text-xs font-bold uppercase text-slate-400" for="new_connection_id">New ID</label>
                     <div class="relative group">
                         <span
-                            class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">fingerprint</span>
+                            class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors text-xl">fingerprint</span>
                         <input
-                            class="w-full pl-12 pr-4 py-3.5 bg-slate-50 dark:bg-background-dark border border-slate-200 dark:border-border-dark rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600"
-                            id="new_connection_id" placeholder="Enter the new Pipedrive connection ID..." type="text" />
+                            class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-background-dark border border-slate-200 dark:border-border-dark rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600 text-sm"
+                            id="new_connection_id" placeholder="Enter Pipedrive connection ID..." type="text" />
                     </div>
                 </div>
             </div>
@@ -171,16 +170,16 @@
         <!-- Action Buttons -->
         <div class="flex flex-col items-center gap-4">
             <button id="migrate-btn"
-                class="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-4 px-10 rounded-xl flex items-center justify-center gap-2 shadow-xl transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed">
-                <span class="material-symbols-outlined">rocket_launch</span>
+                class="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-3.5 px-8 rounded-lg flex items-center justify-center gap-2 shadow-lg transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-base">
+                <span class="material-symbols-outlined text-2xl">rocket_launch</span>
                 <span id="btn-text">Migrate Blueprint</span>
                 <div class="spinner hidden" id="btn-spinner"></div>
             </button>
             <button
-                class="flex items-center gap-2 text-slate-400 hover:text-primary transition-colors text-sm font-medium"
+                class="flex items-center gap-1.5 text-slate-400 hover:text-primary transition-colors text-xs font-bold uppercase tracking-wider"
                 onclick="alert('To find your Connection ID in Make.com:\\n\\n1. Click on any Pipedrive module in your scenario\\n2. Click on the connection dropdown\\n3. Right-click and choose \\\'Inspect Element\\\'\\n4. Look for the connection ID in the HTML\\n\\nAlternatively, contact your Make.com administrator.')">
-                <span class="material-symbols-outlined text-lg">info</span>
-                How to find my Connection ID?
+                <span class="material-symbols-outlined text-base">info</span>
+                How to find Connection ID?
             </button>
         </div>
 

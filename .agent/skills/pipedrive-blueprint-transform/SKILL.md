@@ -52,3 +52,25 @@ Some modules require specific field key changes:
 - **Pattern**: Scenarios often have Pipedrive modules nested inside multiple layers of Routers.
 - **Fix**: Ensure the migration script uses a recursive `process_blueprint` function that looks specifically for common container keys like `modules`, `elements`, and `routes`.
 
+## 6. Person Data Injection (V2 Path Breaking Change)
+In Pipedrive v2, `GetDeal` no longer returns embedded person data. Scenarios that rely on `{{X.person_id.phone}}` or `{{2.person_id.email}}` will break.
+
+### Injection Logic
+- **Detection**: Scan for `{{X.person_id.Y}}` references where `X` is a Deal-related module.
+- **Action**: Inject a `pipedrive:GetPersonV2` module immediately after the Deal module.
+- **Naming (CRITICAL)**: The module must be named `pipedrive:GetPersonV2` (Capital **G**). Using `getPersonV2` will result in "Module Not Found".
+
+### Reference Rewriting (Pluralization)
+V2 Person modules use different field names for contact info:
+- **Phone**: `{{X.person_id.phone[].value}}` (V1) → `{{Y.phones[].value}}` (V2)
+- **Email**: `{{X.person_id.email[].value}}` (V1) → `{{Y.emails[].value}}` (V2)
+- **Name**: `{{X.person_id.name}}` (V1) → `{{Y.name}}` (V2)
+*Note: `X` is the original Deal module ID; `Y` is the new injected Person module ID.*
+
+## 7. HTTP Method Serialization
+For `pipedrive:MakeAPICallV2` and native `http:MakeRequest` modules:
+- **Case Sensitivity**: The `method` field must be **UPPERCASE** (e.g., `"GET"`, `"POST"`). Lowercase values will cause validation errors in Make.com.
+- **Conversion**: Always apply `.upper()` to any method string during migration.
+- **Cleaning**: Ensure v1 query parameters like `api_token` are stripped from the URL string even if they are hardcoded.
+
+

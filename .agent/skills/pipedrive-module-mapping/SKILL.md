@@ -52,3 +52,17 @@ Modules that do not have a direct V2 equivalent in Make.com are converted to `pi
 - **Query Params**: Ensure `exact_match=true` is used if the original search was intended to find a specific record (e.g., by custom field hash).
 - **Pagination**: Note that V2 search results are wrapped in a `data.items` array, whereas V1 results might have had a different structure.
 
+## 5. Case Sensitivity Warning (CRITICAL)
+Make.com is case-sensitive for module identifiers. 
+- **Correct**: `pipedrive:GetPersonV2` (Capital **G**)
+- **Incorrect**: `pipedrive:getPersonV2` (Results in "Module Not Found")
+*Note: Interestingly, `getDealV2` and `updateDealV2` start with lowercase `g`, but `GetPersonV2` and `MakeAPICallV2` use uppercase.*
+
+## 6. HTTP Module Conversion
+Native HTTP modules (`http:MakeRequest`, `http:ActionSendData`) targeting `pipedrive.com` must be converted:
+- **Target**: `pipedrive:MakeAPICallV2`
+- **Path Transformation**: Remove protocol/domain and force `/v2/` prefix (e.g., `https://api.pipedrive.com/v1/deals` → `/v2/deals`).
+- **Token Striping**: Search for and remove `api_token` from both the URL string and the query string parameters.
+- **Method Case**: Ensure the `method` is UPPERCASE.
+
+

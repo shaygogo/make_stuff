@@ -1,0 +1,2000 @@
+{
+    "name": "Update Air Table With Therapists",
+    "flow": [
+        {
+            "id": 1,
+            "module": "http:ActionSendData",
+            "version": 3,
+            "parameters": {
+                "handleErrors": false
+            },
+            "mapper": {
+                "qs": [],
+                "url": "https://api.pipedrive.com/v1/dealFields/12492?api_token=913b78c91eb41d5aeed54e099e9ab673cab744d5",
+                "data": "",
+                "gzip": true,
+                "method": "get",
+                "headers": [],
+                "timeout": "",
+                "authPass": "",
+                "authUser": "",
+                "bodyType": "raw",
+                "contentType": "",
+                "shareCookies": false,
+                "followRedirect": true,
+                "useQuerystring": false,
+                "rejectUnauthorized": true
+            },
+            "metadata": {
+                "designer": {
+                    "x": 0,
+                    "y": 0
+                },
+                "restore": {
+                    "qs": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "method": {
+                        "mode": "chose",
+                        "label": "GET"
+                    },
+                    "headers": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "bodyType": {
+                        "label": "Raw"
+                    },
+                    "contentType": {
+                        "label": ""
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "handleErrors",
+                        "type": "boolean",
+                        "label": "Evaluate all states as errors (except for 2xx and 3xx )",
+                        "required": true
+                    }
+                ],
+                "expect": [
+                    {
+                        "name": "url",
+                        "type": "url",
+                        "label": "URL",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "method",
+                        "type": "select",
+                        "label": "Method",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "validate": {
+                            "enum": [
+                                "get",
+                                "head",
+                                "post",
+                                "put",
+                                "patch",
+                                "delete"
+                            ]
+                        },
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "qs",
+                        "spec": [
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ],
+                        "type": "array",
+                        "label": "Query String",
+                        "labels": {
+                            "add": "Add parameter",
+                            "edit": "Edit parameter"
+                        },
+                        "erasable": false,
+                        "mappable": false,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "headers",
+                        "spec": [
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ],
+                        "type": "array",
+                        "label": "Headers",
+                        "labels": {
+                            "add": "Add a header",
+                            "edit": "Edit a header"
+                        },
+                        "erasable": false,
+                        "mappable": false,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "authUser",
+                        "type": "text",
+                        "label": "User name",
+                        "erasable": false,
+                        "mappable": false,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "authPass",
+                        "type": "password",
+                        "label": "Password",
+                        "erasable": false,
+                        "mappable": false,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "timeout",
+                        "type": "uinteger",
+                        "label": "Timeout",
+                        "erasable": false,
+                        "mappable": false,
+                        "validate": {
+                            "max": 300,
+                            "min": 1
+                        },
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "shareCookies",
+                        "type": "boolean",
+                        "label": "Share cookies with other HTTP modules",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "rejectUnauthorized",
+                        "type": "boolean",
+                        "label": "Reject connections that are using unverified (self-signed) certificates",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "followRedirect",
+                        "type": "boolean",
+                        "label": "Follow redirect",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "useQuerystring",
+                        "type": "boolean",
+                        "label": "Disable serialization of multiple same query string keys as arrays",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "gzip",
+                        "type": "boolean",
+                        "label": "Request compressed content",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "bodyType",
+                        "type": "select",
+                        "label": "Body type",
+                        "erasable": false,
+                        "mappable": false,
+                        "validate": {
+                            "enum": [
+                                "raw",
+                                "x_www_form_urlencoded",
+                                "multipart_form_data"
+                            ]
+                        },
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "contentType",
+                        "type": "select",
+                        "label": "Content type",
+                        "erasable": false,
+                        "mappable": false,
+                        "validate": {
+                            "enum": [
+                                "text/plain",
+                                "application/json",
+                                "application/xml",
+                                "text/xml",
+                                "text/html",
+                                "custom"
+                            ]
+                        },
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "data",
+                        "type": "buffer",
+                        "label": "Request content",
+                        "erasable": false,
+                        "mappable": false,
+                        "showErasePill": false
+                    }
+                ]
+            }
+        },
+        {
+            "id": 2,
+            "module": "json:ParseJSON",
+            "version": 1,
+            "parameters": {
+                "type": 23037
+            },
+            "mapper": {
+                "json": "{{1.data}}"
+            },
+            "metadata": {
+                "designer": {
+                    "x": 300,
+                    "y": 0
+                },
+                "restore": {
+                    "type": {
+                        "label": "Get Therapists "
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "type",
+                        "type": "udt",
+                        "label": "Data structure"
+                    }
+                ],
+                "expect": [
+                    {
+                        "name": "json",
+                        "type": "text",
+                        "label": "JSON string",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "showErasePill": false
+                    }
+                ],
+                "interface": [
+                    {
+                        "name": "success",
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "data",
+                        "spec": [
+                            {
+                                "name": "id",
+                                "type": "number"
+                            },
+                            {
+                                "name": "key",
+                                "type": "text"
+                            },
+                            {
+                                "name": "name",
+                                "type": "text"
+                            },
+                            {
+                                "name": "order_nr",
+                                "type": "number"
+                            },
+                            {
+                                "name": "field_type",
+                                "type": "text"
+                            },
+                            {
+                                "name": "add_time",
+                                "type": "text"
+                            },
+                            {
+                                "name": "update_time",
+                                "type": "text"
+                            },
+                            {
+                                "name": "active_flag",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "edit_flag",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "index_visible_flag",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "details_visible_flag",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "add_visible_flag",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "important_flag",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "bulk_edit_allowed",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "searchable_flag",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "filtering_allowed",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "sortable_flag",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "options",
+                                "spec": {
+                                    "spec": [
+                                        {
+                                            "name": "id",
+                                            "type": "number"
+                                        },
+                                        {
+                                            "name": "label",
+                                            "type": "text"
+                                        }
+                                    ],
+                                    "type": "collection"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "name": "mandatory_flag",
+                                "type": "boolean"
+                            }
+                        ],
+                        "type": "collection"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 4,
+            "module": "builtin:BasicFeeder",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "array": "{{2.data.options}}"
+            },
+            "metadata": {
+                "designer": {
+                    "x": 655,
+                    "y": -3
+                },
+                "restore": {
+                    "array": {
+                        "mode": "edit"
+                    }
+                },
+                "expect": [
+                    {
+                        "mode": "edit",
+                        "name": "array",
+                        "spec": [],
+                        "type": "array",
+                        "label": "Array",
+                        "erasable": false,
+                        "mappable": false,
+                        "showErasePill": false
+                    }
+                ]
+            }
+        },
+        {
+            "id": 3,
+            "module": "airtable:ActionSearchRecords",
+            "version": 1,
+            "parameters": {
+                "__IMTCONN__": 356560
+            },
+            "filter": {
+                "name": "",
+                "conditions": [
+                    [
+                        {
+                            "a": "{{4.`__IMTINDEX__`}}",
+                            "b": "40",
+                            "o": "number:greater"
+                        }
+                    ]
+                ]
+            },
+            "mapper": {
+                "sort": [],
+                "view": "",
+                "table": "appVs22Kltbpn48WU/TherapistsDB",
+                "formula": "AND({Name} = '{{replace(4.label; \"'\"; emptystring)}}')",
+                "maxRecords": ""
+            },
+            "metadata": {
+                "designer": {
+                    "x": 1014,
+                    "y": -2
+                },
+                "restore": {
+                    "sort": {
+                        "items": []
+                    },
+                    "view": {
+                        "label": ""
+                    },
+                    "table": {
+                        "label": "TherapistsDB"
+                    },
+                    "__IMTCONN__": {
+                        "label": "My Airtable connection (Noa Benshi)"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "__IMTCONN__",
+                        "type": "account",
+                        "label": "Connection",
+                        "required": true
+                    }
+                ],
+                "expect": [
+                    {
+                        "name": "table",
+                        "type": "select",
+                        "label": "Table",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "formula",
+                        "type": "text",
+                        "label": "Formula",
+                        "erasable": false,
+                        "mappable": false,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "sort",
+                        "spec": [
+                            {
+                                "name": "field",
+                                "type": "select",
+                                "label": "Field"
+                            },
+                            {
+                                "name": "direction",
+                                "type": "select",
+                                "label": "Direction",
+                                "options": [
+                                    {
+                                        "label": "Descending",
+                                        "value": "desc"
+                                    },
+                                    {
+                                        "label": "Ascending",
+                                        "value": "asc"
+                                    }
+                                ]
+                            }
+                        ],
+                        "type": "array",
+                        "label": "Sort",
+                        "erasable": false,
+                        "mappable": false,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "view",
+                        "type": "select",
+                        "label": "View",
+                        "erasable": false,
+                        "mappable": false,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "maxRecords",
+                        "type": "integer",
+                        "label": "Max Records",
+                        "erasable": false,
+                        "mappable": false,
+                        "showErasePill": false
+                    }
+                ],
+                "interface": [
+                    {
+                        "name": "__IMTLENGTH__",
+                        "type": "uinteger",
+                        "label": "Total number of bundles"
+                    },
+                    {
+                        "name": "__IMTINDEX__",
+                        "type": "uinteger",
+                        "label": "Bundle order position"
+                    },
+                    {
+                        "name": "id",
+                        "type": "text"
+                    },
+                    {
+                        "name": "createdTime",
+                        "type": "date"
+                    },
+                    {
+                        "name": "Name",
+                        "type": "text"
+                    },
+                    {
+                        "name": "שם מלא",
+                        "type": "text"
+                    },
+                    {
+                        "name": "Gender",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "מספר טלפון",
+                        "type": "text"
+                    },
+                    {
+                        "name": "מספר רשיון",
+                        "type": "text"
+                    },
+                    {
+                        "name": "שנת סיום לימודי פיזיותרפיה",
+                        "type": "integer",
+                        "validate": {
+                            "min": 0
+                        }
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "ישוב מגורים",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "כתובת הקליניקה להפניות מטופלים דרכנו",
+                        "type": "text"
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "Area",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "Expertise",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "Training",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "תאר את הגישה הטיפולית שלך",
+                        "type": "text",
+                        "multiline": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "מאפייני טיפול",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "שפות נוספות",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "סמן את שעות הפעילות שלך [בוקר]",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "סמן את שעות הפעילות שלך [צהריים]",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "סמן את שעות הפעילות שלך [ערב]",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "קישור לאתר",
+                        "type": "url"
+                    },
+                    {
+                        "name": "הודעת טקסט מותאמת",
+                        "type": "text",
+                        "multiline": true
+                    },
+                    {
+                        "name": "דירוג המשרד",
+                        "type": "uinteger",
+                        "validate": {
+                            "max": 5,
+                            "min": 1
+                        }
+                    },
+                    {
+                        "name": "עוסק מורשה / פטור",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "נסיון תעסוקתי",
+                        "type": "text",
+                        "multiline": true
+                    },
+                    {
+                        "name": "תאריך לידה",
+                        "time": false,
+                        "type": "date"
+                    },
+                    {
+                        "name": "קורות חיים",
+                        "spec": [
+                            {
+                                "name": "url",
+                                "type": "url"
+                            },
+                            {
+                                "name": "filename",
+                                "type": "text"
+                            },
+                            {
+                                "name": "size",
+                                "type": "number"
+                            },
+                            {
+                                "name": "type",
+                                "type": "text",
+                                "label": "MIME type"
+                            }
+                        ],
+                        "type": "array"
+                    },
+                    {
+                        "name": "Email",
+                        "type": "email"
+                    },
+                    {
+                        "name": "Activ",
+                        "type": "text"
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "city",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "Treatment Place",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "הסדרי חניה ליד הקליניקה",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "עותק רשיון משרד הבריאות",
+                        "spec": [
+                            {
+                                "name": "url",
+                                "type": "url"
+                            },
+                            {
+                                "name": "filename",
+                                "type": "text"
+                            },
+                            {
+                                "name": "size",
+                                "type": "number"
+                            },
+                            {
+                                "name": "type",
+                                "type": "text",
+                                "label": "MIME type"
+                            }
+                        ],
+                        "type": "array"
+                    },
+                    {
+                        "name": "cityInternal",
+                        "type": "text"
+                    },
+                    {
+                        "name": "expertiseInternal",
+                        "type": "text"
+                    },
+                    {
+                        "name": "AreaInternal",
+                        "type": "text"
+                    },
+                    {
+                        "name": "trainingInternal",
+                        "type": "text"
+                    },
+                    {
+                        "name": "תמונה לדף אישי באתר",
+                        "spec": [
+                            {
+                                "name": "url",
+                                "type": "url"
+                            },
+                            {
+                                "name": "filename",
+                                "type": "text"
+                            },
+                            {
+                                "name": "size",
+                                "type": "number"
+                            },
+                            {
+                                "name": "type",
+                                "type": "text",
+                                "label": "MIME type"
+                            }
+                        ],
+                        "type": "array"
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "מעקב טיפולים",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "ציוד ומכשור בקליניקה",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "הערות חשובות",
+                        "type": "text",
+                        "multiline": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "ציוד שמביא לביקורי בית",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "דירוג לקוחות",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "City copy",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "City copy",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "לינק לטבלת מעקב טיפולים",
+                        "type": "url"
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "משובי לקוחות",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "נסיון תעסוקתי שדות",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "ID_PIPEDRIVE",
+                        "type": "integer",
+                        "validate": {
+                            "min": 0
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "id": 5,
+            "module": "airtable:ActionUpdateRecords",
+            "version": 1,
+            "parameters": {
+                "__IMTCONN__": 356560
+            },
+            "mapper": {
+                "id": "{{3.id}}",
+                "table": "appVs22Kltbpn48WU/TherapistsDB",
+                "record": {
+                    "Area": [],
+                    "Name": "",
+                    "city": [],
+                    "Activ": "",
+                    "Email": "",
+                    "Gender": [],
+                    "Training": [],
+                    "City copy": [],
+                    "Expertise": [],
+                    "שם מלא": "",
+                    "ID_PIPEDRIVE": "{{4.id}}",
+                    "Treatment Place": [],
+                    "מספר טלפון": "",
+                    "מספר רשיון": "",
+                    "קורות חיים": [],
+                    "קישור לאתר": "",
+                    "תאריך לידה": "",
+                    "דירוג המשרד": "",
+                    "ישוב מגורים": [],
+                    "שפות נוספות": [],
+                    "דירוג לקוחות": [],
+                    "הערות חשובות": "",
+                    "מעקב טיפולים": [],
+                    "משובי לקוחות": [],
+                    "מאפייני טיפול": [],
+                    "נסיון תעסוקתי": "",
+                    "עוסק מורשה / פטור": [],
+                    "הודעת טקסט מותאמת": "",
+                    "נסיון תעסוקתי שדות": [],
+                    "תמונה לדף אישי באתר": [],
+                    "ציוד ומכשור בקליניקה": [],
+                    "ציוד שמביא לביקורי בית": [],
+                    "הסדרי חניה ליד הקליניקה": [],
+                    "לינק לטבלת מעקב טיפולים": "",
+                    "עותק רשיון משרד הבריאות": [],
+                    "תאר את הגישה הטיפולית שלך": "",
+                    "שנת סיום לימודי פיזיותרפיה": "",
+                    "סמן את שעות הפעילות שלך [ערב]": [],
+                    "סמן את שעות הפעילות שלך [בוקר]": [],
+                    "סמן את שעות הפעילות שלך [צהריים]": [],
+                    "כתובת הקליניקה להפניות מטופלים דרכנו": ""
+                },
+                "typecast": false
+            },
+            "metadata": {
+                "designer": {
+                    "x": 1314,
+                    "y": -2
+                },
+                "restore": {
+                    "Area": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "city": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "Activ": {
+                        "mode": "chose",
+                        "label": ""
+                    },
+                    "table": {
+                        "label": "TherapistsDB"
+                    },
+                    "Gender": {
+                        "mode": "chose"
+                    },
+                    "Training": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "City copy": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "Expertise": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "__IMTCONN__": {
+                        "label": "My Airtable connection (Noa Benshi)"
+                    },
+                    "Treatment Place": {
+                        "mode": "chose"
+                    },
+                    "קורות חיים": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "ישוב מגורים": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "שפות נוספות": {
+                        "mode": "chose"
+                    },
+                    "דירוג לקוחות": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "מעקב טיפולים": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "משובי לקוחות": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "מאפייני טיפול": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "עוסק מורשה / פטור": {
+                        "mode": "chose"
+                    },
+                    "נסיון תעסוקתי שדות": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "תמונה לדף אישי באתר": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "ציוד ומכשור בקליניקה": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "ציוד שמביא לביקורי בית": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "הסדרי חניה ליד הקליניקה": {
+                        "mode": "chose"
+                    },
+                    "עותק רשיון משרד הבריאות": {
+                        "mode": "chose",
+                        "items": []
+                    },
+                    "סמן את שעות הפעילות שלך [ערב]": {
+                        "mode": "chose"
+                    },
+                    "סמן את שעות הפעילות שלך [בוקר]": {
+                        "mode": "chose"
+                    },
+                    "סמן את שעות הפעילות שלך [צהריים]": {
+                        "mode": "chose"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "__IMTCONN__",
+                        "type": "account",
+                        "label": "Connection",
+                        "required": true
+                    }
+                ],
+                "expect": [
+                    {
+                        "name": "table",
+                        "type": "select",
+                        "label": "Table",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "typecast",
+                        "type": "boolean",
+                        "label": "Smart links",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "id",
+                        "type": "text",
+                        "label": "Record Id",
+                        "erasable": false,
+                        "mappable": false,
+                        "required": true,
+                        "showErasePill": false
+                    },
+                    {
+                        "name": "record",
+                        "spec": [
+                            {
+                                "name": "Name",
+                                "type": "text",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "שם מלא",
+                                "type": "text",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "Gender",
+                                "type": "select",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiple": true,
+                                "validate": {
+                                    "enum": [
+                                        "נקבה",
+                                        "זכר"
+                                    ]
+                                },
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "מספר טלפון",
+                                "type": "text",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "מספר רשיון",
+                                "type": "text",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "שנת סיום לימודי פיזיותרפיה",
+                                "type": "integer",
+                                "erasable": false,
+                                "mappable": false,
+                                "validate": {
+                                    "min": 0
+                                },
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "ישוב מגורים",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "כתובת הקליניקה להפניות מטופלים דרכנו",
+                                "type": "text",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "Area",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "Expertise",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "Training",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "תאר את הגישה הטיפולית שלך",
+                                "type": "text",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiline": true,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "מאפייני טיפול",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "שפות נוספות",
+                                "type": "select",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiple": true,
+                                "validate": {
+                                    "enum": [
+                                        "אנגלית",
+                                        "הולנדית",
+                                        "רוסית",
+                                        "רוסית בסיסית",
+                                        "רוסית בסיסית לצורך טיפול",
+                                        "צרפתית",
+                                        "ערבית",
+                                        "אמהרית",
+                                        "טיפול אקטיבי שבו המטופל לוקח חלק פעיל",
+                                        "טיפול ממוקד מטרות תפקודיות כדי לשפר פעולות יומיומיות",
+                                        "טיפול הוליסטי בשילוב גוף נפש, עם דגש על הרפיה",
+                                        "דוגל במתן כלים למטופל לעבודה עצמית גם להמשך הדרך",
+                                        "טיפול עדין ובהתאם ליכולת המטופל"
+                                    ]
+                                },
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "סמן את שעות הפעילות שלך [בוקר]",
+                                "type": "select",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiple": true,
+                                "validate": {
+                                    "enum": [
+                                        "ראשון",
+                                        "שני",
+                                        "רביעי",
+                                        "שלישי",
+                                        "חמישי",
+                                        "שישי",
+                                        "רוסית",
+                                        "אנגלית"
+                                    ]
+                                },
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "סמן את שעות הפעילות שלך [צהריים]",
+                                "type": "select",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiple": true,
+                                "validate": {
+                                    "enum": [
+                                        "שלישי",
+                                        "רביעי",
+                                        "ראשון",
+                                        "חמישי",
+                                        "שני",
+                                        "שישי"
+                                    ]
+                                },
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "סמן את שעות הפעילות שלך [ערב]",
+                                "type": "select",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiple": true,
+                                "validate": {
+                                    "enum": [
+                                        "שלישי",
+                                        "רביעי",
+                                        "חמישי",
+                                        "שני",
+                                        "ראשון",
+                                        "שישי"
+                                    ]
+                                },
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "קישור לאתר",
+                                "type": "url",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "הודעת טקסט מותאמת",
+                                "type": "text",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiline": true,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "דירוג המשרד",
+                                "type": "uinteger",
+                                "erasable": false,
+                                "mappable": false,
+                                "validate": {
+                                    "max": 5,
+                                    "min": 1
+                                },
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "עוסק מורשה / פטור",
+                                "type": "select",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiple": true,
+                                "validate": {
+                                    "enum": [
+                                        "עוסק מורשה",
+                                        "עוסק פטור"
+                                    ]
+                                },
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "נסיון תעסוקתי",
+                                "type": "text",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiline": true,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "תאריך לידה",
+                                "time": false,
+                                "type": "date",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "קורות חיים",
+                                "spec": [
+                                    {
+                                        "name": "url",
+                                        "type": "url",
+                                        "label": "File URL",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "filename",
+                                        "type": "filename",
+                                        "label": "File name"
+                                    }
+                                ],
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "Email",
+                                "type": "email",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "Activ",
+                                "type": "select",
+                                "erasable": false,
+                                "mappable": false,
+                                "validate": {
+                                    "enum": [
+                                        "פעיל",
+                                        "רדום"
+                                    ]
+                                },
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "city",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "Treatment Place",
+                                "type": "select",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiple": true,
+                                "validate": {
+                                    "enum": [
+                                        "קליניקה",
+                                        "ביקורי בית"
+                                    ]
+                                },
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "הסדרי חניה ליד הקליניקה",
+                                "type": "select",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiple": true,
+                                "validate": {
+                                    "enum": [
+                                        "חניה ברחוב בתשלום",
+                                        "חניה בחניון בתשלום",
+                                        "חניה בחינם"
+                                    ]
+                                },
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "עותק רשיון משרד הבריאות",
+                                "spec": [
+                                    {
+                                        "name": "url",
+                                        "type": "url",
+                                        "label": "File URL",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "filename",
+                                        "type": "filename",
+                                        "label": "File name"
+                                    }
+                                ],
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "תמונה לדף אישי באתר",
+                                "spec": [
+                                    {
+                                        "name": "url",
+                                        "type": "url",
+                                        "label": "File URL",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "filename",
+                                        "type": "filename",
+                                        "label": "File name"
+                                    }
+                                ],
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "מעקב טיפולים",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "ציוד ומכשור בקליניקה",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "הערות חשובות",
+                                "type": "text",
+                                "erasable": false,
+                                "mappable": false,
+                                "multiline": true,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "ציוד שמביא לביקורי בית",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "דירוג לקוחות",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "City copy",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "City copy",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "לינק לטבלת מעקב טיפולים",
+                                "type": "url",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "משובי לקוחות",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "נסיון תעסוקתי שדות",
+                                "spec": {
+                                    "type": "text"
+                                },
+                                "type": "array",
+                                "erasable": false,
+                                "mappable": false,
+                                "showErasePill": false
+                            },
+                            {
+                                "name": "ID_PIPEDRIVE",
+                                "type": "integer",
+                                "erasable": false,
+                                "mappable": false,
+                                "validate": {
+                                    "min": 0
+                                },
+                                "showErasePill": false
+                            }
+                        ],
+                        "type": "collection",
+                        "label": "Record"
+                    }
+                ],
+                "interface": [
+                    {
+                        "name": "id",
+                        "type": "text"
+                    },
+                    {
+                        "name": "createdTime",
+                        "type": "date"
+                    },
+                    {
+                        "name": "Name",
+                        "type": "text"
+                    },
+                    {
+                        "name": "שם מלא",
+                        "type": "text"
+                    },
+                    {
+                        "name": "Gender",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "מספר טלפון",
+                        "type": "text"
+                    },
+                    {
+                        "name": "מספר רשיון",
+                        "type": "text"
+                    },
+                    {
+                        "name": "שנת סיום לימודי פיזיותרפיה",
+                        "type": "integer",
+                        "validate": {
+                            "min": 0
+                        }
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "ישוב מגורים",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "כתובת הקליניקה להפניות מטופלים דרכנו",
+                        "type": "text"
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "Area",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "Expertise",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "Training",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "תאר את הגישה הטיפולית שלך",
+                        "type": "text",
+                        "multiline": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "מאפייני טיפול",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "שפות נוספות",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "סמן את שעות הפעילות שלך [בוקר]",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "סמן את שעות הפעילות שלך [צהריים]",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "סמן את שעות הפעילות שלך [ערב]",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "קישור לאתר",
+                        "type": "url"
+                    },
+                    {
+                        "name": "הודעת טקסט מותאמת",
+                        "type": "text",
+                        "multiline": true
+                    },
+                    {
+                        "name": "דירוג המשרד",
+                        "type": "uinteger",
+                        "validate": {
+                            "max": 5,
+                            "min": 1
+                        }
+                    },
+                    {
+                        "name": "עוסק מורשה / פטור",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "נסיון תעסוקתי",
+                        "type": "text",
+                        "multiline": true
+                    },
+                    {
+                        "name": "תאריך לידה",
+                        "time": false,
+                        "type": "date"
+                    },
+                    {
+                        "name": "קורות חיים",
+                        "spec": [
+                            {
+                                "name": "url",
+                                "type": "url"
+                            },
+                            {
+                                "name": "filename",
+                                "type": "text"
+                            },
+                            {
+                                "name": "size",
+                                "type": "number"
+                            },
+                            {
+                                "name": "type",
+                                "type": "text",
+                                "label": "MIME type"
+                            }
+                        ],
+                        "type": "array"
+                    },
+                    {
+                        "name": "Email",
+                        "type": "email"
+                    },
+                    {
+                        "name": "Activ",
+                        "type": "text"
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "city",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "Treatment Place",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "הסדרי חניה ליד הקליניקה",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "עותק רשיון משרד הבריאות",
+                        "spec": [
+                            {
+                                "name": "url",
+                                "type": "url"
+                            },
+                            {
+                                "name": "filename",
+                                "type": "text"
+                            },
+                            {
+                                "name": "size",
+                                "type": "number"
+                            },
+                            {
+                                "name": "type",
+                                "type": "text",
+                                "label": "MIME type"
+                            }
+                        ],
+                        "type": "array"
+                    },
+                    {
+                        "name": "cityInternal",
+                        "type": "text"
+                    },
+                    {
+                        "name": "expertiseInternal",
+                        "type": "text"
+                    },
+                    {
+                        "name": "AreaInternal",
+                        "type": "text"
+                    },
+                    {
+                        "name": "trainingInternal",
+                        "type": "text"
+                    },
+                    {
+                        "name": "תמונה לדף אישי באתר",
+                        "spec": [
+                            {
+                                "name": "url",
+                                "type": "url"
+                            },
+                            {
+                                "name": "filename",
+                                "type": "text"
+                            },
+                            {
+                                "name": "size",
+                                "type": "number"
+                            },
+                            {
+                                "name": "type",
+                                "type": "text",
+                                "label": "MIME type"
+                            }
+                        ],
+                        "type": "array"
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "מעקב טיפולים",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "ציוד ומכשור בקליניקה",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "הערות חשובות",
+                        "type": "text",
+                        "multiline": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "ציוד שמביא לביקורי בית",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "דירוג לקוחות",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "City copy",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "City copy",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "לינק לטבלת מעקב טיפולים",
+                        "type": "url"
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "משובי לקוחות",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "help": "Array of Airtable record Ids",
+                        "name": "נסיון תעסוקתי שדות",
+                        "spec": {
+                            "type": "text"
+                        },
+                        "type": "array",
+                        "editable": true
+                    },
+                    {
+                        "name": "ID_PIPEDRIVE",
+                        "type": "integer",
+                        "validate": {
+                            "min": 0
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "metadata": {
+        "instant": false,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": false,
+            "sequential": false,
+            "slots": null,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false
+        },
+        "designer": {
+            "orphans": []
+        },
+        "zone": "eu1.make.com",
+        "notes": []
+    }
+}

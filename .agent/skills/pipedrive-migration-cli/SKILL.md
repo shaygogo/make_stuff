@@ -42,5 +42,15 @@ Migrated blueprints are saved to the `./migrated_scenarios/` directory with the 
 ## 5. Learned Patterns
 
 ### Windows Console Encoding
-- **Issue**: Unicode emojis (✅, ⚠️, ✅) cause `UnicodeEncodeError` when printing to Windows consoles (e.g., CP1255/CP1252) that don't support UTF-8 by default.
-- **Fix**: Use ASCII-safe markers like `[OK]`, `[!!]`, `->` for script output to ensure compatibility across all terminal environments.
+## 6. Web Interface (`app.py`)
+A Flask-based web interface is available for easier use by non-developers.
+- **Start**: `python app.py`
+- **Access**: `http://localhost:5000`
+- **Feature Matching**: The web app uses `migrate_blueprint()`, ensuring it gets the full transformation pipeline, including **GetPersonV2 injection** which may be missed if calling lower-level migration functions directly.
+
+## 7. Default Connection Handling
+For testing, a static Pipedrive OAuth connection ID has been set in `migrate_pipedrive.py`:
+- **Default ID**: `4683394`
+- **Reasoning**: Pipedrive v2 requires an OAuth connection (v1 used API keys). Since the IDs are incompatible, the script injects this working ID to make scenarios "plug-and-play" on the test team.
+- **Overriding**: Both the CLI and Web App support overriding this ID via environment variables or UI inputs.
+

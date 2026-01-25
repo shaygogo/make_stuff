@@ -13,6 +13,9 @@ Legacy v1 modules use API Key connections. All migrated v2 modules MUST use OAut
 - **Connection ID**: `4683394`
 - **Connection Label**: `My Pipedrive OAuth connection (noa benshitrit noabenshi@gmail.com)`
 
+*Note: All v2 modules require OAuth. API Keys from v1 are not transferable. The script defaults to this connection ID to ensure scenarios work immediately in the Physiogroup environment.*
+
+
 ## 2. Make.com API Environment
 To interact with the Make.com API (for fetching or updating blueprints), the following environment variables/constants are used:
 

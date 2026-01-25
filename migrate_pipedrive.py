@@ -17,7 +17,7 @@ BASE_URL = "https://eu1.make.com/api/v2"
 
 # Pipedrive API v2 requires OAuth connections (not API Key)
 # Default connection ID - can be overridden when calling migrate_blueprint()
-PIPEDRIVE_OAUTH_CONN_ID = int(os.getenv('PIPEDRIVE_OAUTH_CONN_ID', '0'))  # Set via environment variable
+PIPEDRIVE_OAUTH_CONN_ID = int(os.getenv('PIPEDRIVE_OAUTH_CONN_ID', '4683394'))  # Set via environment variable
 PIPEDRIVE_OAUTH_CONN_LABEL = os.getenv('PIPEDRIVE_OAUTH_CONN_LABEL', 'Pipedrive OAuth Connection')
 
 # Module mapping: old_module_name -> new_module_name
@@ -80,8 +80,272 @@ PIPEDRIVE_GENERIC_REPLACEMENTS = {
     'pipedrive:getNote': {'url': '/v2/notes/{{id}}', 'method': 'GET'},
 }
 
+# V2 Breaking Change: GetDeal no longer returns embedded person details
+# These patterns need to be detected and a GetPersonV2 module injected
+# Maps v1 person_id fields to v2 GetPersonV2 output fields
+PERSON_FIELD_MAPPINGS = {
+    'person_id.name': 'name',
+    'person_id.first_name': 'first_name',
+    'person_id.last_name': 'last_name',
+    'person_id.phone': 'phones',  # Note: array structure changed too
+    'person_id.phone[]': 'phones[]',
+    'person_id.phone[].value': 'phones[].value',
+    'person_id.phone[].primary': 'phones[].primary',
+    'person_id.email': 'emails',
+    'person_id.email[]': 'emails[]',
+    'person_id.email[].value': 'emails[].value',
+    'person_id.email[].primary': 'emails[].primary',
+    'person_id.value': 'id',  # The numeric ID
+}
+
+# Modules that return deal data with embedded person (in v1) - these need person injection
+DEAL_MODULES_WITH_PERSON = [
+    'pipedrive:GetDeal',
+    'pipedrive:getDeal',
+    'pipedrive:getDealV2',
+    'pipedrive:UpdateDeal',
+    'pipedrive:updateDeal',
+    'pipedrive:updateDealV2',
+    'pipedrive:SearchDeals',
+    'pipedrive:searchDeals',
+    'pipedrive:searchDealsV2',
+    'pipedrive:ListDeals',
+    'pipedrive:listDeals',
+    'pipedrive:listDealsV2',
+]
+
 def is_custom_field(key):
     return len(key) == 40 and all(c in '0123456789abcdef' for c in key)
+
+def find_max_module_id(flow):
+    """Recursively find the maximum module ID in a flow."""
+    max_id = 0
+    for module in flow:
+        if 'id' in module:
+            max_id = max(max_id, module['id'])
+        if 'routes' in module:
+            for route in module['routes']:
+                if 'flow' in route:
+                    max_id = max(max_id, find_max_module_id(route['flow']))
+        if 'onerror' in module:
+            max_id = max(max_id, find_max_module_id(module['onerror']))
+    return max_id
+
+def find_person_field_references(blueprint_json_str, deal_module_id):
+    """
+    Scan the entire blueprint JSON string for references to person_id embedded fields
+    from a specific deal module (e.g., {{2.person_id.phone[].value}}).
+    
+    Returns a list of patterns found.
+    """
+    patterns_found = []
+    
+    # Look for patterns like {{deal_module_id.person_id.X}}
+    # The regex needs to catch various forms:
+    # {{2.person_id.name}}, {{2.person_id.phone[].value}}, {{2.person_id.email[]}}
+    import re
+    
+    # Pattern to match {{id.person_id.something}}
+    pattern = rf'\{{\{{({deal_module_id})\.person_id\.([a-zA-Z_\[\]\.]+)\}}\}}'
+    matches = re.findall(pattern, blueprint_json_str)
+    
+    for match in matches:
+        module_id, field_path = match
+        patterns_found.append({
+            'full_match': f'{{{{{module_id}.person_id.{field_path}}}}}',
+            'module_id': int(module_id),
+            'field_path': f'person_id.{field_path}'
+        })
+    
+    return patterns_found
+
+def create_get_person_module(new_module_id, deal_module_id, connection_id, x_position):
+    """
+    Create a GetPersonV2 module that fetches person details using the person_id from a deal.
+    
+    Args:
+        new_module_id: The ID to assign to the new module
+        deal_module_id: The ID of the deal module to get person_id from
+        connection_id: The Pipedrive OAuth connection ID
+        x_position: The x position for the module in the designer
+    
+    Returns:
+        A complete module dict ready to insert into the flow
+    """
+    return {
+        "id": new_module_id,
+        "module": "pipedrive:GetPersonV2",
+        "version": 2,
+
+        "parameters": {
+            "__IMTCONN__": connection_id
+        },
+        "mapper": {
+            "id": f"{{{{{deal_module_id}.person_id}}}}"
+        },
+        "metadata": {
+            "designer": {
+                "x": x_position,
+                "y": 0,
+                "name": "Get Person (Auto-injected for v2 migration)"
+            },
+            "restore": {
+                "expect": {
+                    "include_fields": {
+                        "mode": "chose"
+                    }
+                },
+                "parameters": {
+                    "__IMTCONN__": {
+                        "data": {
+                            "scoped": "true",
+                            "connection": "pipedrive-auth"
+                        },
+                        "label": PIPEDRIVE_OAUTH_CONN_LABEL
+                    }
+                }
+            },
+            "parameters": [
+                {
+                    "name": "__IMTCONN__",
+                    "type": "account:pipedrive-auth",
+                    "label": "Connection",
+                    "required": True
+                }
+            ],
+            "expect": [
+                {
+                    "name": "id",
+                    "type": "uinteger",
+                    "label": "Person ID",
+                    "required": True
+                },
+                {
+                    "name": "include_fields",
+                    "type": "select",
+                    "label": "Include additional fields",
+                    "multiple": True,
+                    "validate": {
+                        "enum": [
+                            "next_activity_id",
+                            "last_activity_id",
+                            "open_deals_count",
+                            "related_open_deals_count",
+                            "closed_deals_count",
+                            "email_messages_count",
+                            "activities_count",
+                            "done_activities_count",
+                            "undone_activities_count",
+                            "files_count",
+                            "notes_count",
+                            "followers_count"
+                        ]
+                    }
+                }
+            ],
+            "interface": [
+                {"name": "id", "type": "number", "label": "ID"},
+                {"name": "name", "type": "text", "label": "Name"},
+                {"name": "first_name", "type": "text", "label": "First Name"},
+                {"name": "last_name", "type": "text", "label": "Last Name"},
+                {"name": "add_time", "type": "date", "label": "Add Time"},
+                {"name": "update_time", "type": "date", "label": "Update Time"},
+                {"name": "visible_to", "type": "number", "label": "Visible To"},
+                {"name": "owner_id", "type": "number", "label": "Owner ID"},
+                {"name": "label_ids", "type": "array", "label": "Label IDs"},
+                {"name": "org_id", "type": "text", "label": "Org ID"},
+                {"name": "is_deleted", "type": "boolean", "label": "Is Deleted"},
+                {
+                    "name": "phones",
+                    "spec": {
+                        "spec": [
+                            {"name": "label", "type": "text", "label": "Label"},
+                            {"name": "value", "type": "text", "label": "Value"},
+                            {"name": "primary", "type": "boolean", "label": "Primary"}
+                        ],
+                        "type": "collection"
+                    },
+                    "type": "array",
+                    "label": "Phones"
+                },
+                {
+                    "name": "emails",
+                    "spec": {
+                        "spec": [
+                            {"name": "label", "type": "text", "label": "Label"},
+                            {"name": "value", "type": "text", "label": "Value"},
+                            {"name": "primary", "type": "boolean", "label": "Primary"}
+                        ],
+                        "type": "collection"
+                    },
+                    "type": "array",
+                    "label": "Emails"
+                }
+            ]
+        }
+    }
+
+def rewrite_person_references(blueprint_json_str, deal_module_id, person_module_id):
+    """
+    Rewrite all references from deal's embedded person fields to the new GetPersonV2 module.
+    
+    Transforms:
+        {{deal_id.person_id.name}} -> {{person_id.name}}
+        {{deal_id.person_id.phone[].value}} -> {{person_id.phones[].value}}
+        {{deal_id.person_id.email[].value}} -> {{person_id.emails[].value}}
+    
+    Args:
+        blueprint_json_str: The blueprint as a JSON string
+        deal_module_id: The original deal module ID
+        person_module_id: The new GetPersonV2 module ID
+    
+    Returns:
+        The modified JSON string with rewritten references
+    """
+    import re
+    
+    # Define the transformation rules
+    transformations = [
+        # phone -> phones (v1 uses phone, v2 uses phones)
+        (rf'\{{\{{{deal_module_id}\.person_id\.phone(\[\])?\.value\}}\}}',
+         f'{{{{{person_module_id}.phones[].value}}}}'),
+        (rf'\{{\{{{deal_module_id}\.person_id\.phone(\[\])?\.primary\}}\}}',
+         f'{{{{{person_module_id}.phones[].primary}}}}'),
+        (rf'\{{\{{{deal_module_id}\.person_id\.phone(\[\])?\}}\}}',
+         f'{{{{{person_module_id}.phones[]}}}}'),
+         
+        # email -> emails (v1 uses email, v2 uses emails)
+        (rf'\{{\{{{deal_module_id}\.person_id\.email(\[\])?\.value\}}\}}',
+         f'{{{{{person_module_id}.emails[].value}}}}'),
+        (rf'\{{\{{{deal_module_id}\.person_id\.email(\[\])?\.primary\}}\}}',
+         f'{{{{{person_module_id}.emails[].primary}}}}'),
+        (rf'\{{\{{{deal_module_id}\.person_id\.email(\[\])?\}}\}}',
+         f'{{{{{person_module_id}.emails[]}}}}'),
+        
+        # Direct field mappings (name, first_name, last_name, etc.)
+        (rf'\{{\{{{deal_module_id}\.person_id\.name\}}\}}',
+         f'{{{{{person_module_id}.name}}}}'),
+        (rf'\{{\{{{deal_module_id}\.person_id\.first_name\}}\}}',
+         f'{{{{{person_module_id}.first_name}}}}'),
+        (rf'\{{\{{{deal_module_id}\.person_id\.last_name\}}\}}',
+         f'{{{{{person_module_id}.last_name}}}}'),
+        (rf'\{{\{{{deal_module_id}\.person_id\.value\}}\}}',
+         f'{{{{{person_module_id}.id}}}}'),
+        
+        # Catch-all for any remaining person_id.X patterns
+        (rf'\{{\{{{deal_module_id}\.person_id\.([a-zA-Z_]+)\}}\}}',
+         lambda m: f'{{{{{person_module_id}.{m.group(1)}}}}}'),
+    ]
+    
+    result = blueprint_json_str
+    for pattern, replacement in transformations:
+        if callable(replacement):
+            result = re.sub(pattern, replacement, result)
+        else:
+            result = re.sub(pattern, replacement, result)
+    
+    return result
+
 
 def check_http_pipedrive_modules(modules, filename, results=None):
     """
@@ -90,6 +354,7 @@ def check_http_pipedrive_modules(modules, filename, results=None):
     """
     if results is None:
         results = []
+
     
     for module in modules:
         # Recurse into routers
@@ -406,14 +671,20 @@ def process_modules(modules, filename, override_connection_id=None):
                 migration_count += 1
 
         # Handle generic HTTP calls to Pipedrive (both http:MakeRequest and pipedrive:MakeRequest)
-        if module.get('module') in ['http:MakeRequest', 'pipedrive:MakeRequest']:
+        if module.get('module') in ['http:MakeRequest', 'http:ActionSendData', 'pipedrive:MakeRequest']:
             params = module.get('parameters', {})
-            url = params.get('url', '')
+            mapper = module.get('mapper', {})
+            
+            # URL can be in parameters or mapper
+            url = params.get('url', '') or mapper.get('url', '')
             
             # Identify if it's Pipedrive (either the module itself is pipedrive, or the URL targets pipedrive)
-            is_pd = 'pipedrive.com' in url or module.get('module') == 'pipedrive:MakeRequest'
+            is_pd = False
+            if isinstance(url, str):
+                is_pd = 'pipedrive.com' in url.lower() or module.get('module') == 'pipedrive:MakeRequest'
             
             if is_pd:
+
                 print(f"[{filename}] Module {module['id']}: Upgrading to pipedrive:MakeAPICallV2...")
                 
                 # Determine the path
@@ -438,10 +709,10 @@ def process_modules(modules, filename, override_connection_id=None):
                     path = '/v2/' + path.lstrip('/')
                 
                 # Clean up Query String
-                qs = params.get('qs', [])
+                qs = mapper.get('qs') or params.get('qs', [])
                 if isinstance(qs, list):
                     # Filter out V1 specific parameters
-                    new_qs = [item for item in qs if item.get('name') not in ['api_token', 'item_types']]
+                    new_qs = [item for item in qs if isinstance(item, dict) and item.get('name') not in ['api_token', 'item_types']]
                 else:
                     new_qs = []
                 
@@ -449,7 +720,7 @@ def process_modules(modules, filename, override_connection_id=None):
                 if 'deals/search' in path:
                     found_exact = False
                     for item in new_qs:
-                        if item.get('name') == 'exact_match':
+                        if isinstance(item, dict) and item.get('name') == 'exact_match':
                             item['value'] = 'true'
                             found_exact = True
                             break
@@ -457,11 +728,12 @@ def process_modules(modules, filename, override_connection_id=None):
                         new_qs.append({"name": "exact_match", "value": "true"})
 
                 # Clean up Headers
-                headers = params.get('headers', [])
+                headers = mapper.get('headers') or params.get('headers', [])
                 if isinstance(headers, list):
-                    new_headers = [h for h in headers if h.get('name', '').lower() not in ['authorization', 'api_token', 'api-token']]
+                    new_headers = [h for h in headers if isinstance(h, dict) and h.get('name', '').lower() not in ['authorization', 'api_token', 'api-token']]
                 else:
                     new_headers = []
+
 
                 # Update Module Identity
                 module['module'] = 'pipedrive:MakeAPICallV2'
@@ -474,13 +746,22 @@ def process_modules(modules, filename, override_connection_id=None):
                 }
                 
                 # Set Mapper (MakeAPICallV2 uses mapper for request details)
+                # Pick values from mapper first if they exist (dynamic), then parameters (static)
+                method = mapper.get('method') or params.get('method', 'GET')
+                body = mapper.get('body') or params.get('body', '')
+                
+                # Ensure method is uppercase (required by Pipedrive v2)
+                if isinstance(method, str):
+                    method = method.upper()
+                
                 module['mapper'] = {
                     "url": path,
-                    "method": params.get('method', 'GET'),
+                    "method": method,
                     "headers": new_headers,
                     "qs": new_qs,
-                    "body": params.get('body', '')
+                    "body": body
                 }
+
                 
                 # Inject Metadata for UI to render correctly
                 module['metadata'] = {
@@ -515,6 +796,170 @@ def process_modules(modules, filename, override_connection_id=None):
                 
     return modified, migration_count
 
+def inject_get_person_modules(blueprint_data, filename, override_connection_id=None):
+    """
+    Detects Deal modules that have downstream person_id.X references and injects
+    GetPersonV2 modules to handle the v2 breaking change.
+    
+    This function:
+    1. Serializes the blueprint to JSON string to find all references
+    2. Finds all Deal modules (GetDeal, UpdateDeal, etc.)
+    3. For each Deal module, checks if person_id.X fields are used downstream
+    4. If so, creates a GetPersonV2 module and inserts it after the Deal module
+    5. Rewrites all person_id references to point to the new module
+    6. Returns the modified blueprint
+    
+    Args:
+        blueprint_data: The blueprint dict
+        filename: For logging
+        override_connection_id: Connection ID for the new modules
+    
+    Returns:
+        tuple: (modified: bool, blueprint_data: dict, injection_count: int)
+    """
+    if 'flow' not in blueprint_data:
+        return False, blueprint_data, 0
+    
+    # Serialize to find references
+    blueprint_json = json.dumps(blueprint_data, ensure_ascii=False)
+    
+    # Find all Deal modules in the flow
+    deal_modules = []
+    
+    def find_deal_modules_in_flow(flow, parent_flow=None, parent_index=None):
+        """Recursively find all deal modules and their positions."""
+        for idx, module in enumerate(flow):
+            module_type = module.get('module', '')
+            if module_type in DEAL_MODULES_WITH_PERSON:
+                deal_modules.append({
+                    'module': module,
+                    'flow': flow,
+                    'index': idx,
+                    'id': module.get('id')
+                })
+            
+            # Recurse into routers
+            if 'routes' in module:
+                for route in module['routes']:
+                    if 'flow' in route:
+                        find_deal_modules_in_flow(route['flow'])
+            
+            # Recurse into error handlers
+            if 'onerror' in module:
+                find_deal_modules_in_flow(module['onerror'])
+    
+    find_deal_modules_in_flow(blueprint_data['flow'])
+    
+    if not deal_modules:
+        return False, blueprint_data, 0
+    
+    # Find max module ID for new modules
+    max_id = find_max_module_id(blueprint_data['flow'])
+    next_id = max_id + 1
+    
+    modified = False
+    injection_count = 0
+    injections_to_perform = []  # Collect all injections first, then apply
+    
+    # For each deal module, check if person fields are referenced
+    for deal_info in deal_modules:
+        deal_module = deal_info['module']
+        deal_id = deal_info['id']
+        
+        # Check for person_id.X references in the blueprint
+        references = find_person_field_references(blueprint_json, deal_id)
+        
+        if references:
+            print(f"[{filename}] Module {deal_id} ({deal_module.get('module')}): Found {len(references)} person_id references")
+            for ref in references[:3]:  # Show first 3
+                print(f"    - {ref['full_match']}")
+            if len(references) > 3:
+                print(f"    ... and {len(references) - 3} more")
+            
+            # Determine connection ID (use the deal module's connection or override)
+            conn_id = override_connection_id
+            if not conn_id:
+                conn_id = deal_module.get('parameters', {}).get('__IMTCONN__', PIPEDRIVE_OAUTH_CONN_ID)
+            
+            # Get the deal module's x position to place the person module after it
+            designer = deal_module.get('metadata', {}).get('designer', {})
+            deal_x = designer.get('x', 0)
+            person_x = deal_x + 300  # Standard module spacing
+            
+            # Create the injection record
+            injections_to_perform.append({
+                'deal_info': deal_info,
+                'deal_id': deal_id,
+                'person_module_id': next_id,
+                'connection_id': conn_id,
+                'x_position': person_x
+            })
+            
+            next_id += 1
+    
+    if not injections_to_perform:
+        return False, blueprint_data, 0
+    
+    # Apply all reference rewrites first (on the JSON string)
+    for injection in injections_to_perform:
+        blueprint_json = rewrite_person_references(
+            blueprint_json,
+            injection['deal_id'],
+            injection['person_module_id']
+        )
+        print(f"[{filename}] Rewrote person_id references: {{{{...{injection['deal_id']}.person_id.X}}}} -> {{{{...{injection['person_module_id']}.X}}}}")
+    
+    # Parse the modified JSON back to dict
+    blueprint_data = json.loads(blueprint_json)
+    
+    # Now insert the new modules into the flow
+    # We need to re-find the deal modules after JSON round-trip
+    for injection in injections_to_perform:
+        deal_id = injection['deal_id']
+        
+        # Find the deal module in the (potentially modified) flow
+        def find_and_insert(flow):
+            for idx, module in enumerate(flow):
+                if module.get('id') == deal_id:
+                    # Create the GetPersonV2 module
+                    person_module = create_get_person_module(
+                        injection['person_module_id'],
+                        deal_id,
+                        injection['connection_id'],
+                        injection['x_position']
+                    )
+                    
+                    # Insert after the deal module
+                    flow.insert(idx + 1, person_module)
+                    
+                    # Shift x positions of all subsequent modules
+                    for i in range(idx + 2, len(flow)):
+                        if 'metadata' in flow[i] and 'designer' in flow[i]['metadata']:
+                            flow[i]['metadata']['designer']['x'] = flow[i]['metadata']['designer'].get('x', 0) + 300
+                    
+                    return True
+                
+                # Recurse into routers
+                if 'routes' in module:
+                    for route in module['routes']:
+                        if 'flow' in route:
+                            if find_and_insert(route['flow']):
+                                return True
+                
+                # Recurse into error handlers
+                if 'onerror' in module:
+                    if find_and_insert(module['onerror']):
+                        return True
+            
+            return False
+        
+        if find_and_insert(blueprint_data['flow']):
+            print(f"[{filename}] Injected GetPersonV2 module (ID: {injection['person_module_id']}) after Deal module {deal_id}")
+            modified = True
+            injection_count += 1
+    
+    return modified, blueprint_data, injection_count
+
 def migrate_scenario_object(data, scenario_info, override_connection_id=None):
     modified = False
     migration_count = 0
@@ -539,18 +984,32 @@ def migrate_blueprint(blueprint_data, connection_id=None):
     
     blueprint = blueprint_data.get('blueprint', blueprint_data)
     
+    # Step 1: Standard module migration (v1 -> v2)
     modified, transformed, count = migrate_scenario_object(
         blueprint, 
         'API_Request',
         override_connection_id=connection_id
     )
     
+    # Step 2: Inject GetPersonV2 modules for v2 breaking change
+    # (GetDeal no longer returns embedded person details)
+    person_modified, transformed, person_count = inject_get_person_modules(
+        transformed,
+        'API_Request',
+        override_connection_id=connection_id
+    )
+    
+    if person_modified:
+        modified = True
+    
     stats = {
         'modules_migrated': count,
+        'person_modules_injected': person_count,
         'connection_id': connection_id if connection_id else 'preserved'
     }
     
     return modified, transformed, stats
+
 
 def main():
     parser = argparse.ArgumentParser(description='Pipedrive v1 to v2 Blueprint Transform Tool')
@@ -581,14 +1040,16 @@ def main():
                 print_http_check_report(results)
                 return
             
-            # Normal Migration Mode
-            modified, transformed, _ = migrate_scenario_object(blueprint, f"ID:{args.id}")
+            # Normal Migration Mode - use migrate_blueprint for full migration including person injection
+            modified, transformed, stats = migrate_blueprint(data)
             
             if modified:
                 out_path = os.path.join(args.output_dir, f"{args.id}_migrated.json")
                 with open(out_path, 'w', encoding='utf-8') as f:
                     json.dump(transformed, f, indent=4, ensure_ascii=False)
                 print(f"[OK] Migrated blueprint saved to: {out_path}")
+                print(f"    Modules migrated: {stats.get('modules_migrated', 0)}")
+                print(f"    Person modules injected: {stats.get('person_modules_injected', 0)}")
                 print("You can now upload this file to Make.com.")
             else:
                 print("No Pipedrive v1 modules found to migrate.")
@@ -609,12 +1070,15 @@ def main():
             print_http_check_report(results)
             return
             
-        modified, transformed, _ = migrate_scenario_object(data, os.path.basename(args.file))
+        # Use migrate_blueprint for full migration including person injection
+        modified, transformed, stats = migrate_blueprint(data)
         if modified:
             out_path = os.path.join(args.output_dir, os.path.basename(args.file).replace('.json', '_migrated.json'))
             with open(out_path, 'w', encoding='utf-8') as f:
                 json.dump(transformed, f, indent=4, ensure_ascii=False)
             print(f"[OK] Migrated file saved to: {out_path}")
+            print(f"    Modules migrated: {stats.get('modules_migrated', 0)}")
+            print(f"    Person modules injected: {stats.get('person_modules_injected', 0)}")
         else:
             print("No Pipedrive v1 modules found in file.")
     else:
@@ -634,13 +1098,14 @@ def main():
                         if 'flow' in blueprint:
                             check_http_pipedrive_modules(blueprint['flow'], filename, all_results)
                     else:
-                        # In migration mode, proceed as before
-                        modified, transformed, _ = migrate_scenario_object(data, filename)
+                        # In migration mode, use migrate_blueprint for full migration
+                        modified, transformed, stats = migrate_blueprint(data)
                         if modified:
                             out_path = os.path.join(args.output_dir, filename.replace('.json', '_migrated.json'))
                             with open(out_path, 'w', encoding='utf-8') as f:
                                 json.dump(transformed, f, indent=4, ensure_ascii=False)
                             print(f"[OK] Migrated: {filename} -> {out_path}")
+                            print(f"    Modules: {stats.get('modules_migrated', 0)}, Person injections: {stats.get('person_modules_injected', 0)}")
             
             if args.check_http:
                 print_http_check_report(all_results)
