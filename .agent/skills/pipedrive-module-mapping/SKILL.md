@@ -45,6 +45,7 @@ Modules that do not have a direct V2 equivalent in Make.com are converted to `pi
 
 ### Renaming Rules
 - **Activity Deal ID**: When migrating `ListActivityDeals` to `listActivitiesV2`, the filter field `id` (which represented the Deal ID in V1) MUST be renamed to `deal_id` in the v2 mapper to maintain functionality.
+- **Product Owner**: For `createProductV2` or usage of `/v2/products`, `user_id` MUST be renamed to `owner_id`.
 
 ### Item Search Migration
 - **Pattern**: `http:MakeRequest` calls to `/v1/itemSearch` are generally searching for deals.

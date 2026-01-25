@@ -1,0 +1,403 @@
+{
+    "name": "V1 Edge Cases Test",
+    "flow": [
+        {
+            "id": 1,
+            "module": "pipedrive:updateDealV2",
+            "version": 2,
+            "parameters": {
+                "__IMTCONN__": 4683394,
+                "include_fields": [
+                    "d4de1c1518b4531717c676029a45911c340390a6",
+                    "1234567890123456789012345678901234567890",
+                    "53c2f18db6a1655d6af8bba77d9679565f975fd8"
+                ]
+            },
+            "mapper": {
+                "id": 100,
+                "custom_fields": {
+                    "d4de1c1518b4531717c676029a45911c340390a6": {
+                        "value": 500,
+                        "currency": "USD"
+                    },
+                    "1234567890123456789012345678901234567890": "simple_value",
+                    "53c2f18db6a1655d6af8bba77d9679565f975fd8": {
+                        "value": "2023-01-01",
+                        "until": "2023-12-31"
+                    }
+                }
+            },
+            "metadata": {
+                "expect": [
+                    {
+                        "name": "id",
+                        "type": "integer",
+                        "label": "Deal ID",
+                        "required": true
+                    },
+                    {
+                        "name": "custom_fields",
+                        "type": "collection",
+                        "label": "Custom Fields",
+                        "spec": [
+                            {
+                                "name": "d4de1c1518b4531717c676029a45911c340390a6",
+                                "type": "collection",
+                                "label": "Deal Value",
+                                "spec": [
+                                    {
+                                        "name": "value",
+                                        "type": "number",
+                                        "label": "Value"
+                                    }
+                                ]
+                            },
+                            {
+                                "name": "53c2f18db6a1655d6af8bba77d9679565f975fd8",
+                                "type": "collection",
+                                "label": "Deal Range",
+                                "spec": [
+                                    {
+                                        "name": "value",
+                                        "type": "date",
+                                        "label": "Value"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "name": "include_fields",
+                        "type": "select",
+                        "label": "Include fields",
+                        "multiple": true
+                    }
+                ],
+                "restore": {
+                    "parameters": {
+                        "__IMTCONN__": {
+                            "label": "Pipedrive OAuth Connection",
+                            "data": {
+                                "scoped": "true",
+                                "connection": "pipedrive-auth"
+                            }
+                        }
+                    },
+                    "expect": {
+                        "include_fields": {
+                            "mode": "chose"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "id": 2,
+            "module": "pipedrive:MakeAPICallV2",
+            "version": 2,
+            "parameters": {
+                "__IMTCONN__": 4683394
+            },
+            "mapper": {
+                "url": "/v2/deals/search",
+                "method": "GET",
+                "headers": [],
+                "qs": [
+                    {
+                        "name": "term",
+                        "value": "searchterm"
+                    },
+                    {
+                        "name": "match",
+                        "value": "exact"
+                    },
+                    {
+                        "name": "limit",
+                        "value": "50"
+                    }
+                ],
+                "body": ""
+            },
+            "metadata": {
+                "restore": {
+                    "parameters": {
+                        "__IMTCONN__": {
+                            "label": "Pipedrive OAuth Connection",
+                            "data": {
+                                "scoped": "true",
+                                "connection": "pipedrive-auth"
+                            }
+                        }
+                    },
+                    "expect": {
+                        "url": "/v2/deals/search",
+                        "method": "get"
+                    }
+                },
+                "expect": [
+                    {
+                        "name": "url",
+                        "type": "text",
+                        "label": "URL",
+                        "required": true
+                    },
+                    {
+                        "name": "method",
+                        "type": "select",
+                        "label": "Method",
+                        "required": true,
+                        "validate": {
+                            "enum": [
+                                "GET",
+                                "POST",
+                                "PUT",
+                                "PATCH",
+                                "DELETE"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "headers",
+                        "type": "array",
+                        "label": "Headers",
+                        "spec": [
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name"
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "qs",
+                        "type": "array",
+                        "label": "Query String",
+                        "spec": [
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name"
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "body",
+                        "type": "text",
+                        "label": "Body"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 3,
+            "module": "pipedrive:MakeAPICallV2",
+            "version": 2,
+            "parameters": {
+                "__IMTCONN__": 4683394
+            },
+            "mapper": {
+                "url": "/v2/deals",
+                "method": "GET",
+                "headers": [],
+                "qs": [
+                    {
+                        "name": "sort_by",
+                        "value": "add_time"
+                    },
+                    {
+                        "name": "sort_direction",
+                        "value": "desc"
+                    },
+                    {
+                        "name": "limit",
+                        "value": "10"
+                    }
+                ],
+                "body": ""
+            },
+            "metadata": {
+                "restore": {
+                    "parameters": {
+                        "__IMTCONN__": {
+                            "label": "Pipedrive OAuth Connection",
+                            "data": {
+                                "scoped": "true",
+                                "connection": "pipedrive-auth"
+                            }
+                        }
+                    },
+                    "expect": {
+                        "url": "/v2/deals",
+                        "method": "GET"
+                    }
+                },
+                "expect": [
+                    {
+                        "name": "url",
+                        "type": "text",
+                        "label": "URL",
+                        "required": true
+                    },
+                    {
+                        "name": "method",
+                        "type": "select",
+                        "label": "Method",
+                        "required": true,
+                        "validate": {
+                            "enum": [
+                                "GET",
+                                "POST",
+                                "PUT",
+                                "PATCH",
+                                "DELETE"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "headers",
+                        "type": "array",
+                        "label": "Headers",
+                        "spec": [
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name"
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "qs",
+                        "type": "array",
+                        "label": "Query String",
+                        "spec": [
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name"
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "body",
+                        "type": "text",
+                        "label": "Body"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 4,
+            "module": "pipedrive:MakeAPICallV2",
+            "version": 2,
+            "parameters": {
+                "__IMTCONN__": 4683394
+            },
+            "mapper": {
+                "url": "/v2/products",
+                "method": "POST",
+                "headers": [],
+                "qs": [],
+                "body": "{\n    \"name\": \"New Product\",\n    \"owner_id\": 12345\n}"
+            },
+            "metadata": {
+                "restore": {
+                    "parameters": {
+                        "__IMTCONN__": {
+                            "label": "Pipedrive OAuth Connection",
+                            "data": {
+                                "scoped": "true",
+                                "connection": "pipedrive-auth"
+                            }
+                        }
+                    },
+                    "expect": {
+                        "url": "/v2/products",
+                        "method": "GET"
+                    }
+                },
+                "expect": [
+                    {
+                        "name": "url",
+                        "type": "text",
+                        "label": "URL",
+                        "required": true
+                    },
+                    {
+                        "name": "method",
+                        "type": "select",
+                        "label": "Method",
+                        "required": true,
+                        "validate": {
+                            "enum": [
+                                "GET",
+                                "POST",
+                                "PUT",
+                                "PATCH",
+                                "DELETE"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "headers",
+                        "type": "array",
+                        "label": "Headers",
+                        "spec": [
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name"
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "qs",
+                        "type": "array",
+                        "label": "Query String",
+                        "spec": [
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name"
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "body",
+                        "type": "text",
+                        "label": "Body"
+                    }
+                ]
+            }
+        }
+    ]
+}

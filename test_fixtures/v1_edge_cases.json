@@ -1,0 +1,106 @@
+{
+    "blueprint": {
+        "name": "V1 Edge Cases Test",
+        "flow": [
+            {
+                "id": 1,
+                "module": "pipedrive:UpdateDeal",
+                "version": 1,
+                "parameters": {
+                    "__IMTCONN__": 123456
+                },
+                "mapper": {
+                    "id": 100,
+                    "d4de1c1518b4531717c676029a45911c340390a6": 500,
+                    "d4de1c1518b4531717c676029a45911c340390a6_currency": "USD",
+                    "1234567890123456789012345678901234567890": "simple_value",
+                    "53c2f18db6a1655d6af8bba77d9679565f975fd8": "2023-01-01",
+                    "53c2f18db6a1655d6af8bba77d9679565f975fd8_until": "2023-12-31"
+                },
+                "metadata": {
+                    "expect": [
+                        {
+                            "name": "d4de1c1518b4531717c676029a45911c340390a6",
+                            "type": "number",
+                            "label": "Deal Value"
+                        },
+                        {
+                            "name": "53c2f18db6a1655d6af8bba77d9679565f975fd8",
+                            "type": "date",
+                            "label": "Deal Range"
+                        }
+                    ]
+                }
+            },
+            {
+                "id": 2,
+                "module": "http:MakeRequest",
+                "version": 1,
+                "parameters": {
+                    "url": "https://api.pipedrive.com/v1/itemSearch",
+                    "method": "get"
+                },
+                "mapper": {
+                    "qs": [
+                        {
+                            "name": "term",
+                            "value": "searchterm"
+                        },
+                        {
+                            "name": "item_types",
+                            "value": "deal"
+                        },
+                        {
+                            "name": "exact_match",
+                            "value": "true"
+                        },
+                        {
+                            "name": "start",
+                            "value": "0"
+                        },
+                        {
+                            "name": "limit",
+                            "value": "50"
+                        }
+                    ]
+                }
+            },
+            {
+                "id": 3,
+                "module": "pipedrive:MakeRequest",
+                "version": 1,
+                "parameters": {
+                    "url": "/v1/deals"
+                },
+                "mapper": {
+                    "method": "get",
+                    "qs": [
+                        {
+                            "name": "sort",
+                            "value": "add_time DESC"
+                        },
+                        {
+                            "name": "limit",
+                            "value": "10"
+                        }
+                    ]
+                }
+            },
+            {
+                "id": 4,
+                "module": "pipedrive:MakeRequest",
+                "version": 1,
+                "parameters": {
+                    "url": "/v1/products"
+                },
+                "mapper": {
+                    "method": "post",
+                    "body": {
+                        "name": "New Product",
+                        "user_id": 12345
+                    }
+                }
+            }
+        ]
+    }
+}

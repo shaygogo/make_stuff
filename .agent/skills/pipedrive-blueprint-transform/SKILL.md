@@ -14,8 +14,9 @@ Pipedrive v2 modules in Make.com use a deeply nested structure for custom fields
 - **Value Wrapping**: Every custom field mapping must be wrapped in a `{"value": ...}` object.
     - *V1 Format*: `"hash": "{{val}}"`
     - *V2 Format*: `"custom_fields": { "hash": { "value": "{{val}}" } }`
-- **Special Fields**: 
-    - Monetary fields often require both `value` and `currency`.
+- **Special Fields (Consolidation)**: 
+    - Fields with suffixes (e.g., `hash_currency`, `hash_until`, `hash_timezone_id`) must be consolidated into the main field object.
+    - *Example*: `hash: 100`, `hash_currency: "USD"` → `"custom_fields": { "hash": { "value": 100, "currency": "USD" } }`
     - Time fields are treated as collections.
 
 ## 2. Metadata Structure
@@ -34,6 +35,19 @@ For modules migrated to `pipedrive:MakeAPICallV2` (e.g., Persons, Notes):
 ## 4. Field Renaming
 Some modules require specific field key changes:
 - **ListActivityDeals → listActivitiesV2**: The `id` field representing the deal ID must be renamed to `deal_id`.
+- **Products (POST/PUT/PATCH)**: The field `user_id` must be renamed to `owner_id`.
+
+## 5. Search & Sort Parameter Migration
+For `MakeRequest` / `itemSearch` to `MakeAPICallV2` conversion:
+
+### Search
+- **Path**: `itemSearch` → `/v2/deals/search` (usually).
+- **Exact Match**: `exact_match=true` must be converted to `match=exact`.
+- **Pagination**: The `start` parameter is incompatible with V2 cursor pagination and must be removed.
+
+### Sorting
+- **V1**: `sort="field ASC"` or `sort="field DESC"`.
+- **V2**: Split into `sort_by="field"` and `sort_direction="asc|desc"`.
 
 ## 5. Learned Patterns
  

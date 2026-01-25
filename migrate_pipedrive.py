@@ -115,6 +115,8 @@ DEAL_MODULES_WITH_PERSON = [
 ]
 
 def is_custom_field(key):
+    if not isinstance(key, str):
+        return False
     return len(key) == 40 and all(c in '0123456789abcdef' for c in key)
 
 def find_max_module_id(flow):
@@ -447,6 +449,44 @@ def fetch_blueprint(scenario_id):
         print(f"[ERROR] Could not fetch scenario {scenario_id}: {e}")
         return None
 
+def group_custom_fields(mapper_dict):
+    """
+    Identifies and groups custom field keys (primary hash + suffixes) from a mapper dict.
+    Returns:
+        tuple: (clean_mapper: dict, custom_fields_groups: dict)
+    """
+    clean_mapper = {}
+    custom_fields = {} # { hash: { 'value': val, ...extras } }
+    
+    # Identify primary hashes first
+    primary_hashes = set()
+    for key in mapper_dict:
+        if is_custom_field(key):
+            primary_hashes.add(key)
+            
+    # Process all keys
+    for key, value in mapper_dict.items():
+        if key in primary_hashes:
+            if key not in custom_fields: custom_fields[key] = {}
+            custom_fields[key]['value'] = value
+            continue
+            
+        # Check if it's a suffix of a known hash
+        matched_hash = None
+        for h in primary_hashes:
+            if key.startswith(h + '_'):
+                matched_hash = h
+                break
+        
+        if matched_hash:
+            suffix = key[len(matched_hash)+1:]
+            if matched_hash not in custom_fields: custom_fields[matched_hash] = {}
+            custom_fields[matched_hash][suffix] = value
+        else:
+            clean_mapper[key] = value
+            
+    return clean_mapper, custom_fields
+
 def upgrade_pipedrive_connection(module, filename, override_connection_id=None):
     """
     Upgrades a Pipedrive module's connection from API Key to OAuth.
@@ -513,7 +553,6 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None):
         if method in ['POST', 'PATCH']:
             # Transform the remaining fields for the body
             body = {}
-            custom_fields = {}
             
             # Merge parameters and mapper, prioritizing mapper
             # Skip technical parameters
@@ -523,14 +562,24 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None):
                 merged_data.pop(tp, None)
             merged_data.update(old_mapper)
             
-            for key, value in merged_data.items():
-                if is_custom_field(key):
-                     custom_fields[key] = {"value": value}
-                else:
-                     body[key] = value
+            # Use helper to group custom fields
+            clean_data, custom_field_groups = group_custom_fields(merged_data)
             
-            if custom_fields:
-                body["custom_fields"] = custom_fields
+            # Handle product owner renaming
+            if '/products' in url:
+                 if 'user_id' in clean_data:
+                      clean_data['owner_id'] = clean_data.pop('user_id')
+            
+            body = clean_data
+            
+            if custom_field_groups:
+                processed_groups = {}
+                for hash_key, data in custom_field_groups.items():
+                    if len(data) == 1 and 'value' in data:
+                        processed_groups[hash_key] = data['value']
+                    else:
+                        processed_groups[hash_key] = data
+                body["custom_fields"] = processed_groups
             
             new_mapper["body"] = json.dumps(body, indent=4, ensure_ascii=False)
         
@@ -540,17 +589,24 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None):
         new_mapper = {}
         custom_fields_mapper = {}
         
-        for key, value in old_mapper.items():
-            if is_custom_field(key):
-                # v2 custom fields need wrapping
-                custom_fields_mapper[key] = {"value": value}
+        # Use helper to group custom fields
+        clean_data, custom_field_groups = group_custom_fields(old_mapper)
+        
+        for key, value in clean_data.items():
+            # Special handling for ListActivityDeals: rename 'id' to 'deal_id'
+            if old_module == 'pipedrive:ListActivityDeals' and key == 'id':
+                new_mapper['deal_id'] = value
             else:
-                # Special handling for ListActivityDeals: rename 'id' to 'deal_id'
-                if old_module == 'pipedrive:ListActivityDeals' and key == 'id':
-                    new_mapper['deal_id'] = value
-                else:
-                    new_mapper[key] = value
+                new_mapper[key] = value
 
+        for hash_key, data in custom_field_groups.items():
+             # Unwrap simple values (e.g. text/number fields) which V2 expects as "key": "value"
+             # Complex fields (currency/time) stay as objects "key": {"value": ..., "currency": ...}
+             if len(data) == 1 and 'value' in data:
+                 custom_fields_mapper[hash_key] = data['value']
+             else:
+                 custom_fields_mapper[hash_key] = data
+            
         if custom_fields_mapper:
             new_mapper["custom_fields"] = custom_fields_mapper
             
@@ -605,7 +661,11 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None):
             # v2 usually makes these collections in the spec too
             f_copy = field.copy()
             f_copy['type'] = 'collection' # Most are collections in v2 spec
+            # We don't know exact subfields (currency, timezone etc) without checking
+            # the definition, but "value" is always there.
             f_copy['spec'] = [{"name": "value", "type": field.get('type', 'text'), "label": "Value"}]
+            # Add common extras just in case, or leave dynamic?
+            # Safest is just Value for now unless we know better.
             custom_fields_spec.append(f_copy)
         elif name == 'id' and 'Deal' in new_module:
             f_copy = field.copy()
@@ -717,15 +777,53 @@ def process_modules(modules, filename, override_connection_id=None):
                     new_qs = []
                 
                 # Handle exact_match for search
-                if 'deals/search' in path:
-                    found_exact = False
+                if 'deals/search' in path or 'itemSearch' in url:
+                    found_match = False
                     for item in new_qs:
+                        if isinstance(item, dict) and item.get('name') == 'match':
+                            found_match = True
+                            
+                        # Convert exact_match to match=exact
                         if isinstance(item, dict) and item.get('name') == 'exact_match':
-                            item['value'] = 'true'
-                            found_exact = True
-                            break
-                    if not found_exact:
-                        new_qs.append({"name": "exact_match", "value": "true"})
+                             val = item.get('value')
+                             if str(val).lower() in ['true', '1']:
+                                  item['name'] = 'match'
+                                  item['value'] = 'exact'
+                                  found_match = True
+                             else:
+                                  # If exact_match is false, usage of 'middle' is implied (V1 behavior)
+                                  # but we better just remove it and rely on default or set match=middle
+                                  # Changing key to REMOVE to filter it out next pass? 
+                                  # Easier to just reconstruct new_qs properly above.
+                                  pass 
+                    
+                    found_exact_in_source = any(q.get('name') == 'exact_match' and str(q.get('value')).lower() in ['true', '1'] for q in qs if isinstance(q, dict))
+                    
+                    if found_exact_in_source and not any(q.get('name') == 'match' for q in new_qs):
+                         new_qs.append({"name": "match", "value": "exact"})
+
+                # Handle sorting (sort -> sort_by, sort_direction)
+                # Filter out 'sort' from new_qs and parse it
+                final_qs = []
+                for item in new_qs:
+                    if item.get('name') == 'sort':
+                        val = item.get('value', '').strip()
+                        if ' ' in val:
+                            parts = val.split(' ')
+                            sort_by = parts[0]
+                            sort_dir = parts[1].lower() # ASC/DESC
+                        else:
+                            sort_by = val
+                            sort_dir = 'asc'
+                        
+                        final_qs.append({"name": "sort_by", "value": sort_by})
+                        final_qs.append({"name": "sort_direction", "value": sort_dir})
+                    elif item.get('name') == 'start':
+                         print(f"[{filename}] WARNING: Removing incompatible 'start' pagination parameter. Check module {module['id']}.")
+                         continue
+                    else:
+                        final_qs.append(item)
+                new_qs = final_qs
 
                 # Clean up Headers
                 headers = mapper.get('headers') or params.get('headers', [])
@@ -748,11 +846,35 @@ def process_modules(modules, filename, override_connection_id=None):
                 # Set Mapper (MakeAPICallV2 uses mapper for request details)
                 # Pick values from mapper first if they exist (dynamic), then parameters (static)
                 method = mapper.get('method') or params.get('method', 'GET')
-                body = mapper.get('body') or params.get('body', '')
+                body_content = mapper.get('body') or params.get('body', '')
                 
                 # Ensure method is uppercase (required by Pipedrive v2)
                 if isinstance(method, str):
                     method = method.upper()
+
+                body = body_content
+                if method in ['POST', 'PUT', 'PATCH']:
+                    # Ensure body is stringified and check specific renaming
+                    if isinstance(body_content, dict):
+                         # Handle rewrites
+                         if 'products' in path and 'user_id' in body_content:
+                              body_content['owner_id'] = body_content.pop('user_id')
+                         
+                         # Stringify
+                         body = json.dumps(body_content, indent=4, ensure_ascii=False)
+                    elif isinstance(body_content, str) and body_content.strip().startswith('{'):
+                         # Try to parse, fix, re-dump if it looks like JSON
+                         try:
+                              body_json = json.loads(body_content)
+                              if 'products' in path and 'user_id' in body_json:
+                                   body_json['owner_id'] = body_json.pop('user_id')
+                                   body = json.dumps(body_json, indent=4, ensure_ascii=False)
+                              else:
+                                   # Ensure valid JSON string
+                                   body = body_content
+                         except:
+                              # Parse error, leave as is
+                              body = body_content
                 
                 module['mapper'] = {
                     "url": path,
