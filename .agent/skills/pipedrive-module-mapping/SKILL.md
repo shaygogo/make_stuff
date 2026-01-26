@@ -24,11 +24,15 @@ This skill maintains the mapping rules for converting Legacy v1 modules to API v
 | `SearchProducts` | `searchProductsV2` | |
 | `GetProduct` | `getProductV2` | |
 | `DeleteProduct` | `deleteProductV2` | |
+| `DeleteDeal` | `deleteDealV2` | |
+| `DeletePerson` | `deletePersonV2` | |
+| `DeleteOrganization` | `deleteOrganizationV2` | |
+| `DeleteActivity` | `deleteActivityV2` | |
+| `DeleteNote` | `deleteNoteV2` | |
 | `ListActivityDeals` | `listActivitiesV2` | Rename `id` → `deal_id` |
-| `searchPersons` | `searchPersonsV2` | |
-| `listDealsForPerson` | `listDealsForPersonV2` | |
-| `ListProductsInDeal` | `listProductsInDealV2` | |
 | `UploadFile` | `uploadFileV2` | |
+| `DeleteFile` | `deleteFileV2` | |
+| `DownloadFile` | `downloadFileV2` | |
 | `MakeAPICall` | `MakeAPICallV2` | |
 
 ## 2. Generic API Call Replacements (MakeAPICallV2)

@@ -44,9 +44,10 @@ PIPEDRIVE_MODULE_UPGRADES = {
     'pipedrive:searchOrganizations': 'pipedrive:searchOrganizationsV2',
 
     # Specific names from blueprint
-    'pipedrive:DeleteDeal': 'pipedrive:DeleteDeal',
+    'pipedrive:DeleteDeal': 'pipedrive:deleteDealV2',
+    'pipedrive:deleteDeal': 'pipedrive:deleteDealV2',
     'pipedrive:AddProductToDeal': 'pipedrive:AddProductToDeal',
-    'pipedrive:ListDealFiles': 'pipedrive:ListDealFiles',
+    'pipedrive:ListDealFiles': 'pipedrive:listDealFiles', # Check if V2 exists, often generic list
     'pipedrive:ListDealsForProduct': 'pipedrive:listDealsForProduct',
     'pipedrive:ListDealFields': 'pipedrive:listDealFields',
     'pipedrive:GetADealField': 'pipedrive:getADealField',
@@ -56,6 +57,20 @@ PIPEDRIVE_MODULE_UPGRADES = {
     'pipedrive:SearchProducts': 'pipedrive:searchProductsV2',
     'pipedrive:GetProduct': 'pipedrive:getProductV2',
     'pipedrive:MakeAPICall': 'pipedrive:MakeAPICallV2',
+
+    # Delete Modules
+    'pipedrive:DeletePerson': 'pipedrive:deletePersonV2',
+    'pipedrive:deletePerson': 'pipedrive:deletePersonV2',
+    'pipedrive:DeleteOrganization': 'pipedrive:deleteOrganizationV2',
+    'pipedrive:deleteOrganization': 'pipedrive:deleteOrganizationV2',
+    'pipedrive:DeleteActivity': 'pipedrive:deleteActivityV2',
+    'pipedrive:deleteActivity': 'pipedrive:deleteActivityV2',
+    'pipedrive:DeleteNote': 'pipedrive:deleteNoteV2',
+    'pipedrive:deleteNote': 'pipedrive:deleteNoteV2',
+    'pipedrive:DeleteFile': 'pipedrive:deleteFileV2',
+    'pipedrive:deleteFile': 'pipedrive:deleteFileV2',
+    'pipedrive:DownloadFile': 'pipedrive:downloadFileV2',
+    'pipedrive:downloadFile': 'pipedrive:downloadFileV2',
 
     # Products
     'pipedrive:UpdateProduct': 'pipedrive:updateProductV2',
