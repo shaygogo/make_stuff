@@ -20,8 +20,10 @@ This skill maintains the mapping rules for converting Legacy v1 modules to API v
 | `SearchOrganizations` | `searchOrganizationsV2` | |
 | `GetOrganization` | `getOrganizationV2` | |
 | `CreateProduct` | `createProductV2` | |
+| `UpdateProduct` | `updateProductV2` | |
 | `SearchProducts` | `searchProductsV2` | |
 | `GetProduct` | `getProductV2` | |
+| `DeleteProduct` | `deleteProductV2` | |
 | `ListActivityDeals` | `listActivitiesV2` | Rename `id` → `deal_id` |
 | `searchPersons` | `searchPersonsV2` | |
 | `listDealsForPerson` | `listDealsForPersonV2` | |

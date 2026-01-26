@@ -57,6 +57,12 @@ PIPEDRIVE_MODULE_UPGRADES = {
     'pipedrive:GetProduct': 'pipedrive:getProductV2',
     'pipedrive:MakeAPICall': 'pipedrive:MakeAPICallV2',
 
+    # Products
+    'pipedrive:UpdateProduct': 'pipedrive:updateProductV2',
+    'pipedrive:updateProduct': 'pipedrive:updateProductV2',
+    'pipedrive:DeleteProduct': 'pipedrive:deleteProductV2',
+    'pipedrive:deleteProduct': 'pipedrive:deleteProductV2',
+
     # Inferred / Others
     'pipedrive:UpdateActivity': 'pipedrive:updateActivityV2',
     'pipedrive:ListActivityDeals': 'pipedrive:listActivitiesV2',
