@@ -1,0 +1,44 @@
+{
+    "name": "Enum Mapping Experiment",
+    "modules": [
+        {
+            "id": 1,
+            "module": "builtin:BasicFeeder",
+            "metadata": {
+                "designer": {
+                    "x": 0,
+                    "y": 0
+                }
+            }
+        },
+        {
+            "id": 2,
+            "module": "pipedrive:addDeal",
+            "mapper": {
+                "title": "Static Mapping Test",
+                "170fec77b436631984905a2a5f82308bad04aff3": "תעריף 2022"
+            },
+            "metadata": {
+                "designer": {
+                    "x": 300,
+                    "y": 0
+                }
+            }
+        },
+        {
+            "id": 3,
+            "module": "pipedrive:updateDeal",
+            "mapper": {
+                "id": 123,
+                "title": "Dynamic Mapping Test",
+                "170fec77b436631984905a2a5f82308bad04aff3": "{{1.value}}"
+            },
+            "metadata": {
+                "designer": {
+                    "x": 600,
+                    "y": 0
+                }
+            }
+        }
+    ]
+}

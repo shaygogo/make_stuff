@@ -4,6 +4,10 @@ from werkzeug.utils import secure_filename
 import json
 import io
 import traceback
+from dotenv import load_dotenv
+
+load_dotenv() # Load environment variables from .env file BEFORE importing modules that use them
+
 from migrate_pipedrive import migrate_blueprint
 
 app = Flask(__name__, static_folder='static', template_folder='.')
@@ -77,10 +81,16 @@ def migrate():
         else:
             new_connection_id = None  # Preserve mode
         
+        # Get smart fields flag (convert string "true"/"false" to boolean)
+        raw_smart = request.form.get('smart_fields')
+        smart_fields = str(raw_smart).lower() == 'true'
+        print(f"DEBUG: raw_smart_fields={raw_smart}, parsed={smart_fields}")
+        
         # Perform migration
         modified, migrated_data, stats = migrate_blueprint(
             blueprint_data, 
-            connection_id=new_connection_id
+            connection_id=new_connection_id,
+            smart_fields=smart_fields
         )
         
         if not modified:

@@ -51,3 +51,13 @@ During transformation, the script must:
 | Physiogroup Health Care | 8538 | 7616 | eu1 |
 
 **CRITICAL**: All migration activities are strictly restricted to this organization and team. No other organizations should be considered or searched unless explicitly requested.
+
+## 6. Pipedrive API Direct Access (For Migration Scripts)
+To perform "live" cross-referencing of fields (resolving IDs vs Labels), the migration script requires direct access to the Pipedrive API.
+
+- **Endpoints**:
+    - `GET https://api.pipedrive.com/v1/dealFields` (Returns definition of all Deal fields)
+    - `GET https://api.pipedrive.com/v1/personFields`
+    - `GET https://api.pipedrive.com/v1/organizationFields`
+- **Authentication**: Requires a valid `api_token` (v1 style) or OAuth access token provided in the `.env` file as `PIPEDRIVE_API_TOKEN`.
+- **Note**: While v1 modules are deprecated, the v1 *API endpoints* for field metadata are usually still accessible during the transition period and provide the necessary hash-to-type mapping.

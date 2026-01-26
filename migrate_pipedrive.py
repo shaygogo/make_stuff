@@ -4,6 +4,9 @@ import sys
 import argparse
 import urllib.request
 import re
+from dotenv import load_dotenv
+
+load_dotenv() # Load env vars for CLI usage
 
 # --- Configuration ---
 INPUT_FOLDER = './scenarios'
@@ -19,6 +22,8 @@ BASE_URL = "https://eu1.make.com/api/v2"
 # Default connection ID - can be overridden when calling migrate_blueprint()
 PIPEDRIVE_OAUTH_CONN_ID = int(os.getenv('PIPEDRIVE_OAUTH_CONN_ID', '4683394'))  # Set via environment variable
 PIPEDRIVE_OAUTH_CONN_LABEL = os.getenv('PIPEDRIVE_OAUTH_CONN_LABEL', 'Pipedrive OAuth Connection')
+PIPEDRIVE_API_TOKEN = os.getenv('PIPEDRIVE_API_TOKEN', '') # Needed for smart field resolution
+
 
 # Module mapping: old_module_name -> new_module_name
 PIPEDRIVE_MODULE_UPGRADES = {
@@ -132,6 +137,94 @@ def find_max_module_id(flow):
         if 'onerror' in module:
             max_id = max(max_id, find_max_module_id(module['onerror']))
     return max_id
+
+# --- Smart Field Mapping Helpers ---
+
+def fetch_pipedrive_fields(api_token):
+    """
+    Fetches field definitions from Pipedrive API (v1 endpoints) to build a map of enum/set fields.
+    Returns: dict { 'field_hash': { 'type': 'enum', 'options': [{'id':1, 'label':'A'}] } }
+    """
+    if not api_token:
+        print("[WARNING] PIPEDRIVE_API_TOKEN not set. Smart field mapping will check static known fields only.")
+        return {}
+
+    field_map = {}
+    endpoints = ['dealFields', 'personFields', 'organizationFields']
+    
+    print("[INFO] Fetching Pipedrive field definitions for smart mapping...")
+    
+    for ep in endpoints:
+        url = f"https://api.pipedrive.com/v1/{ep}?api_token={api_token}"
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                if data.get('success'):
+                    for field in data.get('data', []):
+                        # We only care about fields that need ID resolution (enum/set)
+                        if field.get('field_type') in ['enum', 'set']:
+                            key = field.get('key') # The 40-char hash
+                            field_map[key] = {
+                                'name': field.get('name'),
+                                'type': field.get('field_type'),
+                                'options': field.get('options', [])
+                            }
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch {ep}: {e}")
+            
+    print(f"[INFO] Loaded {len(field_map)} smart field definitions.")
+    return field_map
+
+def is_dynamic_value(value):
+    """Check if value contains Make variable syntax {{...}}"""
+    return isinstance(value, str) and "{{" in value
+
+def get_option_id_by_label(field_def, label_value):
+    """Lookup ID for a given label in the field definition"""
+    for opt in field_def.get('options', []):
+        if opt['label'] == label_value:
+            return opt['id']
+    return None
+
+def create_get_fields_module(module_id, connection_id, x_pos, y_pos):
+    """Creates a MakeApiCallV2 module to fetch deal fields for dynamic resolution."""
+    return {
+        "id": module_id,
+        "module": "pipedrive:MakeAPICallV2",
+        "version": 2,
+        "parameters": {
+            "__IMTCONN__": connection_id
+        },
+        "mapper": {
+            "url": "/v2/dealFields", # We assume dealFields covers most use cases. Could need others.
+            "method": "GET"
+        },
+        "metadata": {
+            "designer": {
+                "x": x_pos,
+                "y": y_pos,
+                "name": "Get Fields (Smart Cache)"
+            },
+            "restore": { 
+                "expect": {
+                    "url": "/v2/dealFields",
+                    "method": "GET"
+                },
+                "parameters": {
+                     "__IMTCONN__": {
+                        "label": PIPEDRIVE_OAUTH_CONN_LABEL,
+                        "data": { "scoped": "true", "connection": "pipedrive-auth" }
+                    }
+                }
+            },
+             "expect": [
+                {"name": "url", "type": "text", "label": "URL", "required": True},
+                {"name": "method", "type": "select", "label": "Method", "required": True}
+            ]
+        }
+    }
+
 
 def find_person_field_references(blueprint_json_str, deal_module_id):
     """
@@ -487,7 +580,9 @@ def group_custom_fields(mapper_dict):
             
     return clean_mapper, custom_fields
 
-def upgrade_pipedrive_connection(module, filename, override_connection_id=None):
+    return clean_mapper, custom_fields
+
+def upgrade_pipedrive_connection(module, filename, override_connection_id=None, smart_fields_map=None, injection_helper_id=None):
     """
     Upgrades a Pipedrive module's connection from API Key to OAuth.
     Handles the new v2 nested structure for custom fields and collections.
@@ -496,6 +591,8 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None):
         module: Module dict to upgrade
         filename: Source filename for logging
         override_connection_id: If provided, use this instead of PIPEDRIVE_OAUTH_CONN_ID
+        smart_fields_map: Dict of field definitions for smart mapping (if enabled)
+        injection_helper_id: ID of the injected 'Get Fields' module (if enabled)
     """
     module_id = module['id']
     old_module = module.get('module', '')
@@ -603,7 +700,48 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None):
              # Unwrap simple values (e.g. text/number fields) which V2 expects as "key": "value"
              # Complex fields (currency/time) stay as objects "key": {"value": ..., "currency": ...}
              if len(data) == 1 and 'value' in data:
-                 custom_fields_mapper[hash_key] = data['value']
+                 val = data['value']
+                 
+                 # --- SMART MAPPING LOGIC START ---
+                 if smart_fields_map and hash_key in smart_fields_map:
+                     field_def = smart_fields_map[hash_key]
+                     
+                     if is_dynamic_value(val):
+                         # Dynamic Value: Wrap in map() logic if we have a helper
+                         if injection_helper_id:
+                             # Logic: {{get(map(HELPER.body.data; 'id'; 'label'; VAL); 1)}}
+                             # Note: MakeApiCallV2 return structure needs careful pathing.
+                             # Assuming /v2/dealFields returns { "data": [ { "key": "HASH", "options": [...] } ] }
+                             # This is complex in Make formulas without arrays manipulation.
+                             # Simplified Assumption: User needs to map against the options.
+                             # If we use a DataStore or Variable, it's cleaner. 
+                             # Here we construct the formula best-effort.
+                             
+                             # Actually, mapping from the big Response Array is hard in one line.
+                             # A safer bet is just warning the user, OR assumes a specific path.
+                             
+                             # Let's insert a simpler "Warning/Note" into the value if we can't perfectly automate it
+                             # OR try the map formula:
+                             # map(get(map(999.body.data; "options"; "key"; "HASH"); 1); "id"; "label"; VALUE)
+                             
+                             transformed_val = (
+                                 f"{{{{get(map(get(map({injection_helper_id}.body.data; 'options'; 'key'; '{hash_key}'); 1); 'id'; 'label'; {val.replace('{{','').replace('}}','')}); 1)}}}}"
+                             )
+                             val = transformed_val
+                             print(f"[{filename}] SmartMapped Dynamic Field {hash_key} ({field_def['name']})")
+                             
+                     else:
+                         # Static Label: Resolve to ID
+                         found_id = get_option_id_by_label(field_def, val)
+                         if found_id:
+                             print(f"[{filename}] SmartMapped Static Field {hash_key} ({field_def['name']}): '{val}' -> {found_id}")
+                             val = found_id
+                         else:
+                             print(f"[{filename}] WARNING: Could not resolve label '{val}' for field {field_def['name']}")
+                             
+                 # --- SMART MAPPING LOGIC END ---
+                 
+                 custom_fields_mapper[hash_key] = val
              else:
                  custom_fields_mapper[hash_key] = data
             
@@ -703,7 +841,7 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None):
         
     return True
 
-def process_modules(modules, filename, override_connection_id=None):
+def process_modules(modules, filename, override_connection_id=None, smart_fields_map=None, injection_helper_id=None):
     """Recursively processes modules, including those inside routers."""
     modified = False
     migration_count = 0
@@ -713,20 +851,20 @@ def process_modules(modules, filename, override_connection_id=None):
         if 'routes' in module:
             for route in module['routes']:
                 if 'flow' in route:
-                    nested_modified, nested_count = process_modules(route['flow'], filename, override_connection_id)
+                    nested_modified, nested_count = process_modules(route['flow'], filename, override_connection_id, smart_fields_map, injection_helper_id)
                     if nested_modified:
                         modified = True
                         migration_count += nested_count
         
         # Recurse into error handlers (onerror)
         if 'onerror' in module:
-            nested_modified, nested_count = process_modules(module['onerror'], filename, override_connection_id)
+            nested_modified, nested_count = process_modules(module['onerror'], filename, override_connection_id, smart_fields_map, injection_helper_id)
             if nested_modified:
                 modified = True
                 migration_count += nested_count
         
         if module.get('module') in PIPEDRIVE_MODULE_UPGRADES or module.get('module') in PIPEDRIVE_GENERIC_REPLACEMENTS:
-            if upgrade_pipedrive_connection(module, filename, override_connection_id):
+            if upgrade_pipedrive_connection(module, filename, override_connection_id, smart_fields_map, injection_helper_id):
                 modified = True
                 migration_count += 1
 
@@ -1082,20 +1220,123 @@ def inject_get_person_modules(blueprint_data, filename, override_connection_id=N
     
     return modified, blueprint_data, injection_count
 
-def migrate_scenario_object(data, scenario_info, override_connection_id=None):
+def find_pipedrive_module_ids(flow):
+    """Recursively find all Pipedrive module IDs in a flow."""
+    ids = set()
+    for module in flow:
+        if module.get('module', '').startswith('pipedrive:'):
+            ids.add(module.get('id'))
+        
+        if 'routes' in module:
+            for route in module['routes']:
+                if 'flow' in route:
+                    ids.update(find_pipedrive_module_ids(route['flow']))
+        
+        if 'onerror' in module:
+            ids.update(find_pipedrive_module_ids(module['onerror']))
+    return ids
+
+def rewrite_custom_field_label_references(blueprint_data, helper_id):
+    """
+    Scans the blueprint for references to Pipedrive custom field labels:
+    {{MODULE_ID.HASH.label}}
+    
+    And replaces them with a dynamic lookup formula using the injected 'Get Fields' helper:
+    {{map(get(map(HELPER.body.data; "options"; "key"; "HASH"); 1); "label"; "id"; MODULE_ID.custom_fields.HASH)}}
+    
+    This fixes the issue where V2 modules return IDs but downstream logic expects Labels.
+    """
+    if 'flow' not in blueprint_data:
+        return False, blueprint_data
+
+    # 1. Identify Pipedrive Modules (to only target their outputs)
+    pd_ids = find_pipedrive_module_ids(blueprint_data['flow'])
+    if not pd_ids:
+        return False, blueprint_data
+
+    blueprint_json = json.dumps(blueprint_data, ensure_ascii=False)
+    
+    # Regex to find {{ID.HASH.label}}
+    # Group 1: ID
+    # Group 2: HASH (40 chars hex)
+    pattern = r'\{\{(\d+)\.([a-f0-9]{40})\.label\}\}'
+    
+    def replacement_func(match):
+        mod_id = int(match.group(1))
+        field_hash = match.group(2)
+        
+        if mod_id in pd_ids:
+            # Construct the lookup formula
+            # Note: We must escape double quotes \" because we are inserting into a JSON string value.
+            # Python string: \\\" -> Result: \"
+            formula = (
+                f"{{{{map(get(map({helper_id}.body.data; \\\"options\\\"; \\\"field_code\\\"; \\\"{field_hash}\\\"); 1); "
+                f"\\\"label\\\"; \\\"id\\\"; {mod_id}.custom_fields.{field_hash})}}}}"
+            )
+            return formula
+        else:
+            return match.group(0) # No change
+
+    new_json = re.sub(pattern, replacement_func, blueprint_json)
+    
+    if new_json != blueprint_json:
+        print(f"[INFO] Rewrote custom field label references using Helper Module {helper_id}")
+        return True, json.loads(new_json)
+    
+    return False, blueprint_data
+
+def migrate_scenario_object(data, scenario_info, override_connection_id=None, smart_fields_enabled=False):
     modified = False
     migration_count = 0
+    
+    smart_fields_map = {}
+    injection_helper_id = None
+    
+    if smart_fields_enabled:
+        # 1. Fetch Field Defs
+        smart_fields_map = fetch_pipedrive_fields(PIPEDRIVE_API_TOKEN)
+        
+        # 2. Logic to inject "Get Fields" module at the very start
+        if 'flow' in data and len(data['flow']) > 0:
+            # We insert it at the beginning
+            # Find a safe ID (max + 1) NO, we should probably do MAX + 100 to avoid conflicts
+            # Or just MAX + 1
+            max_id = find_max_module_id(data['flow'])
+            injection_helper_id = max_id + 99 # High number to stand out
+            
+            # Determine connection to use
+            conn_id = override_connection_id if override_connection_id else PIPEDRIVE_OAUTH_CONN_ID
+            
+            # Position it before the first module
+            first_mod = data['flow'][0]
+            x = first_mod.get('metadata', {}).get('designer', {}).get('x', 0)
+            y = first_mod.get('metadata', {}).get('designer', {}).get('y', 0)
+            
+            helper_mod = create_get_fields_module(injection_helper_id, conn_id, x - 300, y)
+            data['flow'].insert(0, helper_mod)
+            print(f"[INFO] Injected 'Get Fields' Smart Cache module (ID: {injection_helper_id})")
+    
     if 'flow' in data:
-        modified, migration_count = process_modules(data['flow'], scenario_info, override_connection_id)
+        modified, migration_count = process_modules(data['flow'], scenario_info, override_connection_id, smart_fields_map, injection_helper_id)
+        
+    if smart_fields_enabled and injection_helper_id:
+        modified = True # We definitely modified it by adding the module
+        
+        # New Step: Rewrite Output References (Label -> Formula)
+        rewritten, new_data = rewrite_custom_field_label_references(data, injection_helper_id)
+        if rewritten:
+            data = new_data
+        
     return modified, data, migration_count
 
-def migrate_blueprint(blueprint_data, connection_id=None):
+def migrate_blueprint(blueprint_data, connection_id=None, smart_fields=False):
     """
     Programmatic interface for migrating a blueprint.
     
     Args:
         blueprint_data: The blueprint JSON object (dict)
         connection_id: Optional connection ID to use. If None, preserves original connections.
+        smart_fields: Boolean, whether to enable smart field mapping (enum ID resolution)
     
     Returns:
         tuple: (modified: bool, migrated_data: dict, stats: dict)
@@ -1110,7 +1351,8 @@ def migrate_blueprint(blueprint_data, connection_id=None):
     modified, transformed, count = migrate_scenario_object(
         blueprint, 
         'API_Request',
-        override_connection_id=connection_id
+        override_connection_id=connection_id,
+        smart_fields_enabled=smart_fields
     )
     
     # Step 2: Inject GetPersonV2 modules for v2 breaking change
@@ -1139,6 +1381,7 @@ def main():
     parser.add_argument('--file', type=str, help='Local JSON file to transform')
     parser.add_argument('--output-dir', type=str, default='./migrated_scenarios', help='Directory for migrated files')
     parser.add_argument('--check-http', action='store_true', help='Check HTTP modules for Pipedrive v2 endpoint usage (no migration)')
+    parser.add_argument('--smart-fields', action='store_true', help='Enable smart resolution of enum/set fields (requires PIPEDRIVE_API_TOKEN)')
     
     args = parser.parse_args()
     
@@ -1163,7 +1406,7 @@ def main():
                 return
             
             # Normal Migration Mode - use migrate_blueprint for full migration including person injection
-            modified, transformed, stats = migrate_blueprint(data)
+            modified, transformed, stats = migrate_blueprint(data, smart_fields=args.smart_fields)
             
             if modified:
                 out_path = os.path.join(args.output_dir, f"{args.id}_migrated.json")
@@ -1193,7 +1436,7 @@ def main():
             return
             
         # Use migrate_blueprint for full migration including person injection
-        modified, transformed, stats = migrate_blueprint(data)
+        modified, transformed, stats = migrate_blueprint(data, smart_fields=args.smart_fields)
         if modified:
             out_path = os.path.join(args.output_dir, os.path.basename(args.file).replace('.json', '_migrated.json'))
             with open(out_path, 'w', encoding='utf-8') as f:
@@ -1221,7 +1464,7 @@ def main():
                             check_http_pipedrive_modules(blueprint['flow'], filename, all_results)
                     else:
                         # In migration mode, use migrate_blueprint for full migration
-                        modified, transformed, stats = migrate_blueprint(data)
+                        modified, transformed, stats = migrate_blueprint(data, smart_fields=args.smart_fields)
                         if modified:
                             out_path = os.path.join(args.output_dir, filename.replace('.json', '_migrated.json'))
                             with open(out_path, 'w', encoding='utf-8') as f:

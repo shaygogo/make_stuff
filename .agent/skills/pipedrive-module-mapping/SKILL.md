@@ -50,14 +50,18 @@ Modules that do not have a direct V2 equivalent in Make.com are converted to `pi
 ### Item Search Migration
 - **Pattern**: `http:MakeRequest` calls to `/v1/itemSearch` are generally searching for deals.
 - **Conversion**: These should be migrated to `GET /v2/deals/search`.
-- **Query Params**: Ensure `exact_match=true` is used if the original search was intended to find a specific record (e.g., by custom field hash).
-- **Pagination**: Note that V2 search results are wrapped in a `data.items` array, whereas V1 results might have had a different structure.
+- **Query Params**: `exact_match=true` (V1) must be converted to `match=exact` (V2).
+- **Pagination**: Note that V2 search results are wrapped in a `data.items` array. The `start` parameter (offset) is replaced by cursor-based pagination.
 
 ## 5. Case Sensitivity Warning (CRITICAL)
 Make.com is case-sensitive for module identifiers. 
 - **Correct**: `pipedrive:GetPersonV2` (Capital **G**)
 - **Incorrect**: `pipedrive:getPersonV2` (Results in "Module Not Found")
 *Note: Interestingly, `getDealV2` and `updateDealV2` start with lowercase `g`, but `GetPersonV2` and `MakeAPICallV2` use uppercase.*
+
+### Legacy Module Case Sensitivity
+The migration script is designed to handle both TitleCase (e.g., `GetDeal`) and camelCase (e.g., `getDeal`) versions of v1 Pipedrive modules, as both are found in older blueprints.
+
 
 ## 6. HTTP Module Conversion
 Native HTTP modules (`http:MakeRequest`, `http:ActionSendData`) targeting `pipedrive.com` must be converted:

@@ -11,13 +11,14 @@ This skill covers the structural transformation of Pipedrive v1 modules to v2 in
 Pipedrive v2 modules in Make.com use a deeply nested structure for custom fields. If these are not followed, mappings will be **invisible** in the UI.
 
 - **Mapper Object**: All custom fields (identified by 40-character hashes) must be placed inside a `custom_fields` object.
-- **Value Wrapping**: Every custom field mapping must be wrapped in a `{"value": ...}` object.
-    - *V1 Format*: `"hash": "{{val}}"`
-    - *V2 Format*: `"custom_fields": { "hash": { "value": "{{val}}" } }`
+- **Value Wrapping (Conditional)**:
+    - **Simple Fields** (Text, Number, Options): Map directly as key-value pairs.
+        - *Format*: `"custom_fields": { "hash": "{{val}}" }`
+    - **Complex Fields** (Money, Time Range): Must be wrapped in an object containing `value` and additional properties (currency, etc.).
+        - *Format*: `"custom_fields": { "hash": { "value": 100, "currency": "USD" } }`
 - **Special Fields (Consolidation)**: 
-    - Fields with suffixes (e.g., `hash_currency`, `hash_until`, `hash_timezone_id`) must be consolidated into the main field object.
-    - *Example*: `hash: 100`, `hash_currency: "USD"` → `"custom_fields": { "hash": { "value": 100, "currency": "USD" } }`
-    - Time fields are treated as collections.
+    - Fields with suffixes (e.g., `hash_currency`, `hash_until`) must be grouped with their parent hash.
+    - If a group contains *only* the value (no currency), it is treated as a Simple Field and unwrapped to the direct value.
 
 ## 2. Metadata Structure
 The `metadata` object must be updated to ensure the UI renders the custom fields correctly:
@@ -49,7 +50,7 @@ For `MakeRequest` / `itemSearch` to `MakeAPICallV2` conversion:
 - **V1**: `sort="field ASC"` or `sort="field DESC"`.
 - **V2**: Split into `sort_by="field"` and `sort_direction="asc|desc"`.
 
-## 5. Learned Patterns
+## 6. Learned Patterns
  
 ### Identifying "Real" Pipedrive Calls
 - **False Positives**: Pipedrive URLs found in `metadata.restore` or field definitions (e.g., a link to a Pipedrive deal for a user) are NOT API calls and should not be migrated.
@@ -66,7 +67,7 @@ For `MakeRequest` / `itemSearch` to `MakeAPICallV2` conversion:
 - **Pattern**: Scenarios often have Pipedrive modules nested inside multiple layers of Routers.
 - **Fix**: Ensure the migration script uses a recursive `process_blueprint` function that looks specifically for common container keys like `modules`, `elements`, and `routes`.
 
-## 6. Person Data Injection (V2 Path Breaking Change)
+## 7. Person Data Injection (V2 Path Breaking Change)
 In Pipedrive v2, `GetDeal` no longer returns embedded person data. Scenarios that rely on `{{X.person_id.phone}}` or `{{2.person_id.email}}` will break.
 
 ### Injection Logic
@@ -81,10 +82,48 @@ V2 Person modules use different field names for contact info:
 - **Name**: `{{X.person_id.name}}` (V1) → `{{Y.name}}` (V2)
 *Note: `X` is the original Deal module ID; `Y` is the new injected Person module ID.*
 
-## 7. HTTP Method Serialization
+## 8. Smart Field Injection (Enum/Set Resolution)
+Pipedrive v2 requires Option **IDs** (integers) for `enum` (single select) and `set` (multi select) fields. V1 accepted Labels.
+
+### Implementation Strategy
+1. **Live Cross-Reference**: 
+   - Before migration, the script must fetch all field definitions (`/dealFields`, `/personFields`) from Pipedrive to build a map: `{ "HASH": { "type": "enum", "options": [...] } }`.
+2. **Detection**:
+   - Check every mapped field hash against this map.
+3. **Values Resolution**:
+   - **Static Values (Labels)**: If the mapped value is a hardcoded string ("Tariff 2022") that matches a label in the options list, replace it directly with the **ID** (5877).
+   - **Dynamic Values (Variables)**: If the mapped value contains `{{...}}`:
+     1. **Inject Cache Module**: Provide a `MakeApiCallV2` module at the start of the scenario (only once) that calls `GET /v2/dealFields`.
+     2. **Rewrite Mapping**: Wrap the variable in a `map()` function to resolve the ID at runtime.
+        ```
+        {{get(map(CACHE_MODULE_ID.body.data; "id"; "label"; CURRENT_VALUE); 1)}}
+        ```
+     *Note*: `CACHE_MODULE_ID` must be the ID of the injected `dealFields` module.
+
+### HTTP Method Serialization
 For `pipedrive:MakeAPICallV2` and native `http:MakeRequest` modules:
 - **Case Sensitivity**: The `method` field must be **UPPERCASE** (e.g., `"GET"`, `"POST"`). Lowercase values will cause validation errors in Make.com.
 - **Conversion**: Always apply `.upper()` to any method string during migration.
 - **Cleaning**: Ensure v1 query parameters like `api_token` are stripped from the URL string even if they are hardcoded.
 
+## 9. Output Reference Rewriting (Label Recovery)
+Pipedrive v2 API returns custom field values as IDs (int) inside the `custom_fields` object, whereas v1 returns the Label (string) or a complex object with `.label` accessor.
 
+### Issue
+Downstream modules (e.g., Set Variable, Text Aggregator) often reference the label: `{{4.d1a9bcc2...2.label}}`.
+In v2, this reference breaks because:
+1. The field is moved to `custom_fields` wrapper.
+2. The value is an ID, so `.label` property doesn't exist on it.
+
+### Fix
+The migration script detects these references and rewrites them into a dynamic lookup formula using the injected "Get Fields" helper module (which caches field definitions).
+
+**Formula**:
+```
+{{map(get(map(103.body.data; "options"; "field_code"; "HASH"); 1); "label"; "id"; 4.custom_fields.HASH)}}
+```
+
+**Logic**:
+1. `map(103.body.data; "options"; "field_code"; "HASH")` -> Finds the field definition matches the hash.
+2. `get(...; 1)` -> Extracts the field definition object.
+3. `map(options; "label"; "id"; VALUE)` -> Maps the option list, finding the "label" where "id" matches the V2 output value.
