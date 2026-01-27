@@ -145,6 +145,32 @@ def is_custom_field(key):
         return False
     return len(key) == 40 and all(c in '0123456789abcdef' for c in key)
 
+    return len(key) == 40 and all(c in '0123456789abcdef' for c in key)
+
+def shift_modules_visual_position(flow, min_x, shift_amount):
+    """
+    Recursively shift modules' X coordinate if they are to the right of min_x.
+    Used to make space for injected modules without overlapping/destroying layout.
+    """
+    for module in flow:
+        # Check current module
+        if 'metadata' in module and 'designer' in module['metadata']:
+            x = module['metadata']['designer'].get('x', 0)
+            # Use a small epsilon or strictly greater/equal?
+            # Creating space AT min_x, so anything originally there or to the right must move.
+            if x >= min_x:
+                module['metadata']['designer']['x'] = x + shift_amount
+        
+        # Recurse into routers
+        if 'routes' in module:
+            for route in module['routes']:
+                if 'flow' in route:
+                    shift_modules_visual_position(route['flow'], min_x, shift_amount)
+                    
+        # Recurse into error handlers
+        if 'onerror' in module:
+            shift_modules_visual_position(module['onerror'], min_x, shift_amount)
+
 def find_max_module_id(flow):
     """Recursively find the maximum module ID in a flow."""
     max_id = 0
@@ -1306,7 +1332,7 @@ def rewrite_custom_field_label_references(blueprint_data, helper_id):
     
     return False, blueprint_data
 
-def migrate_scenario_object(data, scenario_info, override_connection_id=None, smart_fields_enabled=False):
+def migrate_scenario_object(data, scenario_info, override_connection_id=None, smart_fields_enabled=True):
     modified = False
     migration_count = 0
     
@@ -1328,14 +1354,29 @@ def migrate_scenario_object(data, scenario_info, override_connection_id=None, sm
             # Determine connection to use
             conn_id = override_connection_id if override_connection_id else PIPEDRIVE_OAUTH_CONN_ID
             
-            # Position it before the first module
-            first_mod = data['flow'][0]
-            x = first_mod.get('metadata', {}).get('designer', {}).get('x', 0)
-            y = first_mod.get('metadata', {}).get('designer', {}).get('y', 0)
+            # Position logic: User requests it NOT be first.
+            # We will insert at index 1 (second module).
+            # If flow is empty, we can't do much (checked above).
             
-            helper_mod = create_get_fields_module(injection_helper_id, conn_id, x - 300, y)
-            data['flow'].insert(0, helper_mod)
-            print(f"[INFO] Injected 'Get Fields' Smart Cache module (ID: {injection_helper_id})")
+            first_mod = data['flow'][0]
+            first_x = first_mod.get('metadata', {}).get('designer', {}).get('x', 0)
+            first_y = first_mod.get('metadata', {}).get('designer', {}).get('y', 0)
+            
+            # Default placement: after the first module
+            helper_x = first_x + 300
+            helper_y = first_y 
+            
+            # Shift ALL existing modules to the right first (recursive)
+            # This ensures nested modules (routers, etc.) also move, preserving layout structure.
+            shift_modules_visual_position(data['flow'], helper_x, 300)
+            
+            # Create the helper module
+            helper_mod = create_get_fields_module(injection_helper_id, conn_id, helper_x, helper_y)
+            
+            # Insert at index 1
+            data['flow'].insert(1, helper_mod)
+            
+            print(f"[INFO] Injected 'Get Fields' Smart Cache module (ID: {injection_helper_id}) at position 2")
     
     if 'flow' in data:
         modified, migration_count = process_modules(data['flow'], scenario_info, override_connection_id, smart_fields_map, injection_helper_id)
@@ -1350,7 +1391,7 @@ def migrate_scenario_object(data, scenario_info, override_connection_id=None, sm
         
     return modified, data, migration_count
 
-def migrate_blueprint(blueprint_data, connection_id=None, smart_fields=False):
+def migrate_blueprint(blueprint_data, connection_id=None, smart_fields=True):
     """
     Programmatic interface for migrating a blueprint.
     

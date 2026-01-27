@@ -167,41 +167,6 @@
             </div>
         </div>
 
-        <!-- Smart Options -->
-        <div
-            class="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-border-dark p-5 shadow-sm">
-            <h4 class="text-xs font-bold tracking-widest uppercase text-slate-400 mb-4 flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary text-base">auto_fix_high</span>
-                Advanced Features
-            </h4>
-
-            <div class="relative">
-                <input id="smart-fields" name="smart_fields" type="checkbox" class="peer sr-only" />
-                <label for="smart-fields"
-                    class="flex items-start gap-4 p-4 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm h-full peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:text-primary">
-                    <div class="min-w-[20px] pt-0.5">
-                        <div
-                            class="w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 peer-checked:border-primary peer-checked:bg-primary transition-colors flex items-center justify-center">
-                            <span
-                                class="material-symbols-outlined text-white text-[16px] opacity-0 peer-checked:opacity-100">check</span>
-                        </div>
-                    </div>
-                    <div class="flex flex-col">
-                        <span class="font-bold flex items-center gap-2">
-                            Enable Smart Field Mapping
-                            <span
-                                class="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] rounded uppercase font-bold tracking-wider">Beta</span>
-                        </span>
-                        <span class="text-xs text-slate-500 dark:text-slate-400 font-normal leading-relaxed mt-1">
-                            Automatically resolves Pipedrive v2 Select/Option fields (IDs vs Labels).
-                            Injects helper modules and fixes dynamic values.
-                            <span class="block mt-1 text-slate-400 italic">(Requires server-side API Token)</span>
-                        </span>
-                    </div>
-                </label>
-            </div>
-        </div>
-
         <!-- Action Buttons -->
         <div class="flex flex-col items-center gap-4">
             <button id="migrate-btn"
@@ -317,10 +282,6 @@
                 if (connectionMode === 'update') {
                     formData.append('new_connection_id', connectionId);
                 }
-
-                // Add smart fields flag
-                const smartFields = document.getElementById('smart-fields').checked;
-                formData.append('smart_fields', smartFields);
 
                 const response = await fetch('/api/migrate', {
                     method: 'POST',
