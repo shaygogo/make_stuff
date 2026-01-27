@@ -147,29 +147,27 @@ def is_custom_field(key):
 
     return len(key) == 40 and all(c in '0123456789abcdef' for c in key)
 
-def shift_modules_visual_position(flow, min_x, shift_amount):
+def shift_modules_visual_position(flow, min_val, shift_amount, axis='x'):
     """
-    Recursively shift modules' X coordinate if they are to the right of min_x.
-    Used to make space for injected modules without overlapping/destroying layout.
+    Recursively shift modules' coordinate if they are to the right/below a threshold.
+    axis: 'x' or 'y'
     """
     for module in flow:
         # Check current module
         if 'metadata' in module and 'designer' in module['metadata']:
-            x = module['metadata']['designer'].get('x', 0)
-            # Use a small epsilon or strictly greater/equal?
-            # Creating space AT min_x, so anything originally there or to the right must move.
-            if x >= min_x:
-                module['metadata']['designer']['x'] = x + shift_amount
+            val = module['metadata']['designer'].get(axis, 0)
+            if val >= min_val:
+                module['metadata']['designer'][axis] = val + shift_amount
         
         # Recurse into routers
         if 'routes' in module:
             for route in module['routes']:
                 if 'flow' in route:
-                    shift_modules_visual_position(route['flow'], min_x, shift_amount)
+                    shift_modules_visual_position(route['flow'], min_val, shift_amount, axis)
                     
         # Recurse into error handlers
         if 'onerror' in module:
-            shift_modules_visual_position(module['onerror'], min_x, shift_amount)
+            shift_modules_visual_position(module['onerror'], min_val, shift_amount, axis)
 
 def find_max_module_id(flow):
     """Recursively find the maximum module ID in a flow."""
@@ -1356,19 +1354,41 @@ def migrate_scenario_object(data, scenario_info, override_connection_id=None, sm
             
             # Position logic: User requests it NOT be first.
             # We will insert at index 1 (second module).
-            # If flow is empty, we can't do much (checked above).
             
             first_mod = data['flow'][0]
             first_x = first_mod.get('metadata', {}).get('designer', {}).get('x', 0)
             first_y = first_mod.get('metadata', {}).get('designer', {}).get('y', 0)
             
-            # Default placement: after the first module
+            # Default placement: to the right
             helper_x = first_x + 300
-            helper_y = first_y 
+            helper_y = first_y
             
-            # Shift ALL existing modules to the right first (recursive)
-            # This ensures nested modules (routers, etc.) also move, preserving layout structure.
-            shift_modules_visual_position(data['flow'], helper_x, 300)
+            # Check 2nd module (if exists) to detect layout direction
+            if len(data['flow']) > 1:
+                second_mod = data['flow'][1]
+                second_x = second_mod.get('metadata', {}).get('designer', {}).get('x', 0)
+                second_y = second_mod.get('metadata', {}).get('designer', {}).get('y', 0)
+                
+                dx = abs(second_x - first_x)
+                dy = abs(second_y - first_y)
+                
+                if dy > dx:
+                    # Vertical Layout dominant
+                    helper_x = first_x
+                    helper_y = first_y + 300
+                    # Shift everything below
+                    shift_modules_visual_position(data['flow'], helper_y - 10, 300, axis='y')
+                    
+                else:
+                    # Horizontal Layout (or single module, or messy)
+                    # We ensure we are inserting visually "between" 0 and 1
+                    # But simpler is to assume standard right-flow unless vertical is proven.
+                    # Shift everything to the right
+                    shift_modules_visual_position(data['flow'], helper_x - 10, 300, axis='x')
+            
+            else:
+                 # Only 1 module. Just place to the right. No shifting needed (no subsequent modules).
+                 pass
             
             # Create the helper module
             helper_mod = create_get_fields_module(injection_helper_id, conn_id, helper_x, helper_y)
