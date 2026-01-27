@@ -299,7 +299,7 @@ def find_person_field_references(blueprint_json_str, deal_module_id):
     
     return patterns_found
 
-def create_get_person_module(new_module_id, deal_module_id, connection_id, x_position):
+def create_get_person_module(new_module_id, deal_module_id, connection_id, x_position, y_position=0):
     """
     Create a GetPersonV2 module that fetches person details using the person_id from a deal.
     
@@ -308,6 +308,7 @@ def create_get_person_module(new_module_id, deal_module_id, connection_id, x_pos
         deal_module_id: The ID of the deal module to get person_id from
         connection_id: The Pipedrive OAuth connection ID
         x_position: The x position for the module in the designer
+        y_position: The y position (optional, default 0)
     
     Returns:
         A complete module dict ready to insert into the flow
@@ -326,7 +327,7 @@ def create_get_person_module(new_module_id, deal_module_id, connection_id, x_pos
         "metadata": {
             "designer": {
                 "x": x_position,
-                "y": 0,
+                "y": y_position,
                 "name": "Get Person (Auto-injected for v2 migration)"
             },
             "restore": {
@@ -1226,21 +1227,49 @@ def inject_get_person_modules(blueprint_data, filename, override_connection_id=N
         def find_and_insert(flow):
             for idx, module in enumerate(flow):
                 if module.get('id') == deal_id:
+                    # Found the deal module!
+                    # Calculate dynamic position based on current state (layout might have shifted)
+                    designer = module.get('metadata', {}).get('designer', {})
+                    deal_x = designer.get('x', 0)
+                    deal_y = designer.get('y', 0)
+                    
+                    person_x = deal_x + 300
+                    person_y = deal_y
+                    axis = 'x'
+                    threshold = deal_x + 290
+                    
+                    # Detect layout direction by looking at the next module
+                    if idx + 1 < len(flow):
+                        next_mod = flow[idx + 1]
+                        next_designer = next_mod.get('metadata', {}).get('designer', {})
+                        next_x = next_designer.get('x', 0)
+                        next_y = next_designer.get('y', 0)
+                        
+                        dx = abs(next_x - deal_x)
+                        dy = abs(next_y - deal_y)
+                        
+                        if dy > dx:
+                            # Vertical Layout
+                            person_x = deal_x
+                            person_y = deal_y + 300
+                            axis = 'y'
+                            threshold = deal_y + 290
+                    
+                    # Shift visual layout globally to make space
+                    # We reference blueprint_data['flow'] to ensure global shifting (recursive)
+                    shift_modules_visual_position(blueprint_data['flow'], threshold, 300, axis)
+                    
                     # Create the GetPersonV2 module
                     person_module = create_get_person_module(
                         injection['person_module_id'],
                         deal_id,
                         injection['connection_id'],
-                        injection['x_position']
+                        person_x,
+                        person_y
                     )
                     
                     # Insert after the deal module
                     flow.insert(idx + 1, person_module)
-                    
-                    # Shift x positions of all subsequent modules
-                    for i in range(idx + 2, len(flow)):
-                        if 'metadata' in flow[i] and 'designer' in flow[i]['metadata']:
-                            flow[i]['metadata']['designer']['x'] = flow[i]['metadata']['designer'].get('x', 0) + 300
                     
                     return True
                 
