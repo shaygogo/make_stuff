@@ -31,8 +31,10 @@ Migrated blueprints are saved to the `./migrated_scenarios/` directory with the 
 ## 3. Migration Workflow
 1. **Fetch**: The script retrieves the blueprint (API or File).
 2. **Transform**: Recursive processing of all modules (including those in Routers) using `PIPEDRIVE_MODULE_UPGRADES`.
-3. **Save**: The script writes the new structure to disk.
-4. **Manual Upload**: The user must manually upload the migrated blueprint to Make.com.
+3. **Post-Processing**: `fix_getDealV2_custom_fields()` handles custom field rewriting, companion field detection, and batching (see `pipedrive-blueprint-transform` skill).
+4. **Diagnostic Injection**: `inject_field_map_module()` adds a "Compose a String" module showing all Pipedrive field mappings.
+5. **Save**: The script writes the new structure to disk.
+6. **Manual Upload**: The user must manually upload the migrated blueprint to Make.com.
     - *Note*: Webhook URLs are preserved during manual upload.
 
 ## 4. Batch Migration (`batch_migrate_customer.py`)
@@ -107,6 +109,15 @@ Hebrew filenames can cause `FileNotFoundError` on Windows due to encoding. Use `
 files = glob.glob("*migrated*.blueprint.json")
 ```
 
+### GitHub Secret Scanning
+Blueprint JSON files contain Pipedrive connection IDs and API tokens. GitHub's secret scanning will **block pushes** containing these files. Always add to `.gitignore`:
+```
+*.blueprint.json
+batch_migrated/
+scenarios/
+compose_output.txt
+```
+
 ## 7. Web Interface (`app.py`)
 A Flask-based web interface is available for easier use by non-developers.
 - **Start**: `python app.py`
@@ -121,6 +132,9 @@ For testing, a static Pipedrive OAuth connection ID has been set in `migrate_pip
 - **Overriding**: Both the CLI and Web App support overriding this ID via environment variables or UI inputs.
 
 ## 9. Troubleshooting Common Errors
+
+### "'dict' object has no attribute 'split'"
+This occurs in the diagnostic module (`inject_field_map_module`) when it encounters a **write module** where `custom_fields` is a dict (collection of values), not a string (comma-separated hashes for read modules). Fix: add `isinstance(cf_param, str)` guard before `.split()`.
 
 ### "No Pipedrive v1 modules found in this blueprint. Nothing to migrate."
 This error occurs when the migration script scans the blueprint but finds no modules that require a v1 to v2 conversion.
@@ -142,13 +156,16 @@ This means a simple field (text, number, enum) is being sent as an object `{"val
 This means a time field is being sent as a plain string `"16:15"` when V2 expects `{"value": "16:15"}`. The metadata `expect` type should be `collection` for time fields.
 
 ### "400: Parameter 'include_fields' is not allowed"
-The `include_fields` parameter was added to a module that doesn't support it (e.g., `updateDealV2`). It should only be added to `getDealV2`.
+The `include_fields` parameter was added to a module that doesn't support it (e.g., `updateDealV2`). It should only be added to V2 get modules.
 
 ### "SC400: scheduling is required"
 The `scheduling` parameter is missing from the API scenario creation call. It must be a JSON string.
 
 ### "The hook already has a scenario assigned"
 Webhook bindings must be stripped from the blueprint before creating a new scenario via the API.
+
+### Object fields showing JSON objects instead of values
+When a monetary/time/address field shows `{"value": 180, "currency": "ILS"}` instead of `180`, the `.value` suffix is missing from the reference. Check that the companion field detection (via interface metadata) is working correctly for that module. The `monetary_hashes`, `time_hashes`, and `address_hashes` sets should contain the field's hash.
 
 ## 10. File Naming Conventions
 To avoid confusion during batch processing or manual fixes, use the following naming patterns:

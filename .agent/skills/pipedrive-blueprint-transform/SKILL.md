@@ -52,27 +52,122 @@ The `metadata` object must be updated to ensure the UI renders the custom fields
   # else: keep original type (text, number, date, enum, etc.)
   ```
 
-- **Custom Fields for getDealV2 (CRITICAL)**: In Pipedrive V2 API, custom field values are NOT returned by default. You must explicitly request them via the `custom_fields` query parameter. The migration handles this in `fix_getDealV2_custom_fields()` post-processing:
-  1. **Static analysis**: Scans the entire blueprint for `MODULE_ID.HASH` patterns (40-char hex) referencing each getDealV2 module
-  2. **Reference rewriting**: Rewrites flat `MODULE_ID.HASH` → `MODULE_ID.custom_fields.HASH` (V2 nests custom fields)
-  3. **API limit (15)**: If >15 unique hashes referenced, splits into batches by injecting additional getDealV2 modules (same deal ID, different custom fields)
-  4. Sub-fields like `_timezone_id` and `_currency` suffixes don't count as separate custom fields
+## 3. V2 Get Modules — Custom Field Handling (READ operations)
 
-### getDealV2 Custom Fields (CRITICAL)
+In Pipedrive V2 API, custom field values are NOT returned by default in GET responses. You must explicitly request them via the `custom_fields` query parameter. This applies to **ALL** V2 get modules:
+
+### Supported V2 Get Modules
 ```python
-# Post-processing in fix_getDealV2_custom_fields():
-# 1. Scan blueprint for referenced hashes
-# 2. Set custom_fields param with only used hashes (max 15 per module)
-# 3. Rewrite flat refs to nested: 2.HASH → 2.custom_fields.HASH
-# 4. If >15: inject extra getDealV2 modules for additional batches
-#    References to batch 2+ hashes point to the new module IDs
-
-# ❌ WRONG: Don't request ALL custom fields (API limit is 15)
-# ❌ WRONG: Don't use flat references (V2 nests under custom_fields)
-# ❌ WRONG: Don't put custom field hashes in include_fields (that's for standard fields)
+V2_GET_MODULES = {
+    'pipedrive:getDealV2',
+    'pipedrive:getProductV2',
+    'pipedrive:getPersonV2',     # Note: also getPersonV2 (auto-injected)
+    'pipedrive:GetPersonV2',     # Note: Capital G (Make.com casing)
+    'pipedrive:getOrganizationV2',
+    'pipedrive:getActivityV2',
+}
 ```
 
-## 3. MakeAPICallV2 Body Construction
+### Fields API Endpoints (for .label lookups)
+```python
+MODULE_TO_FIELDS_ENDPOINT = {
+    'pipedrive:getDealV2':         '/v2/dealFields',
+    'pipedrive:getProductV2':      '/v2/productFields',
+    'pipedrive:getPersonV2':       '/v2/personFields',
+    'pipedrive:GetPersonV2':       '/v2/personFields',
+    'pipedrive:getOrganizationV2': '/v2/organizationFields',
+    'pipedrive:getActivityV2':     '/v2/activityFields',
+}
+```
+
+### `include_fields` and `custom_fields` Expect (CRITICAL)
+All V2 get modules need both `include_fields` and `custom_fields` in their expect section. The code checks:
+```python
+v2_get_modules = (
+    'pipedrive:getDealV2', 'pipedrive:getProductV2',
+    'pipedrive:getPersonV2', 'pipedrive:GetPersonV2',
+    'pipedrive:getOrganizationV2', 'pipedrive:getActivityV2',
+)
+```
+
+### Dynamic ID Field
+Each V2 get module gets a dynamic ID field with a human-readable label based on the entity type:
+- `getDealV2` → "Deal ID"
+- `getProductV2` → "Product ID"
+- `GetPersonV2` → "Person ID"
+- `getOrganizationV2` → "Organization ID"
+- `getActivityV2` → "Activity ID"
+
+### The `fix_getDealV2_custom_fields()` Post-Processing Pipeline
+
+This function (despite its name) handles ALL V2 get modules. It runs in two passes:
+
+**PASS 1: Inject helper modules** for `.label` lookups (one per entity type):
+- Each helper calls the fields API (e.g., `GET /v2/dealFields`) and caches field definitions
+- Used by the lookup formula to resolve option IDs back to labels
+
+**PASS 2: Rewrite references** (serialized as JSON string manipulation):
+1. **Detect object-type fields** from companion fields in interface metadata (see Section 4)
+2. **Rewrite companion references** (e.g., `MOD.HASH_currency` → `MOD.custom_fields.HASH.currency`)
+3. **Fix `.customRaw.HASH`** → `.custom_fields.HASH`
+4. **Fix `.label` suffix** → dynamic lookup formula
+5. **Rewrite flat refs** → `MOD.custom_fields.HASH`
+6. **Append `.value`** for object-type fields
+7. **Handle batching** if >15 custom fields referenced
+
+## 4. Object-Type Custom Fields (V1→V2 Breaking Change) — CRITICAL
+
+In V1, many field types returned plain values. In V2, they return JSON objects. This breaks downstream references.
+
+### Detection via Companion Fields
+The script detects object-type fields by scanning the module's V1 `metadata.interface` for companion fields:
+
+| Companion Suffix | Field Type | Detection |
+|:---|:---|:---|
+| `HASH_currency` | Monetary | `fname.endswith('_currency')` |
+| `HASH_timezone_id` | Time | `fname.endswith('_timezone_id')` |
+| `HASH_formatted_address` | Address | `fname.endswith('_formatted_address')` |
+
+### V1 → V2 Value Mapping
+
+| Field Type | V1 Output | V2 Output |
+|:---|:---|:---|
+| **Monetary** | `HASH` = `180`, `HASH_currency` = `"ILS"` | `custom_fields.HASH` = `{"value": 180, "currency": "ILS"}` |
+| **Time** | `HASH` = `"15:15:00"`, `HASH_timezone_id` = `240` | `custom_fields.HASH` = `{"value": "15:15:00", "timezone_id": 240, ...}` |
+| **Address** | `HASH` = `"בני בנימין 7, נתניה"`, `HASH_locality` = `"Netanya"` | `custom_fields.HASH` = `{"value": "בני...", "locality": "Netanya", ...}` |
+
+### Reference Rewriting Rules
+
+**Step 1 — Companion references** (BEFORE flat→nested rewrite):
+```
+MOD.HASH_currency         → MOD.custom_fields.`HASH`.currency
+MOD.HASH_timezone_id      → MOD.custom_fields.`HASH`.timezone_id
+MOD.HASH_timezone_name    → MOD.custom_fields.`HASH`.timezone_name
+MOD.HASH_formatted_address → MOD.custom_fields.`HASH`.formatted_address
+MOD.HASH_locality          → MOD.custom_fields.`HASH`.locality
+MOD.HASH_street_number     → MOD.custom_fields.`HASH`.street_number
+(... and all other address sub-fields)
+```
+
+**Step 2 — Base field `.value` appending** (AFTER flat→nested rewrite):
+```
+MOD.custom_fields.`HASH`  → MOD.custom_fields.`HASH`.value
+```
+Uses negative lookahead to avoid double-appending on refs that already have a subfield:
+```python
+value_pattern = rf'({mod_id}\.custom_fields\.`?{h}`?)(?!\.(value|currency|timezone_id|timezone_name|label|formatted_address|street_number|route|sublocality|locality|admin_area_level_1|admin_area_level_2|country|postal_code|subpremise))'
+```
+
+### Address Field Companion Suffixes (Complete List)
+```python
+ADDRESS_SUFFIXES = [
+    '_formatted_address', '_street_number', '_route', '_sublocality',
+    '_locality', '_admin_area_level_1', '_admin_area_level_2',
+    '_country', '_postal_code', '_subpremise'
+]
+```
+
+## 5. MakeAPICallV2 Body Construction
 For modules migrated to `pipedrive:MakeAPICallV2` (e.g., Persons, Notes):
 - **Body as String**: The `body` field must be a **stringified JSON string**, NOT a JSON object.
 - **Payload Merging**: Static parameters (e.g., `visible_to`, `owner_id`) and dynamic mapper fields must be merged into a single flat object before stringification.
@@ -97,12 +192,12 @@ if generic_config:
         del module['metadata']['interface']
 ```
 
-## 4. Field Renaming
+## 6. Field Renaming
 Some modules require specific field key changes:
 - **ListActivityDeals → listActivitiesV2**: The `id` field representing the deal ID must be renamed to `deal_id`.
 - **Products (POST/PUT/PATCH)**: The field `user_id` must be renamed to `owner_id`.
 
-## 5. Search & Sort Parameter Migration
+## 7. Search & Sort Parameter Migration
 For `MakeRequest` / `itemSearch` to `MakeAPICallV2` conversion:
 
 ### Search
@@ -114,7 +209,7 @@ For `MakeRequest` / `itemSearch` to `MakeAPICallV2` conversion:
 - **V1**: `sort="field ASC"` or `sort="field DESC"`.
 - **V2**: Split into `sort_by="field"` and `sort_direction="asc|desc"`.
 
-## 6. Learned Patterns
+## 8. Learned Patterns
  
 ### Identifying "Real" Pipedrive Calls
 - **False Positives**: Pipedrive URLs found in `metadata.restore` or field definitions (e.g., a link to a Pipedrive deal for a user) are NOT API calls and should not be migrated.
@@ -131,7 +226,7 @@ For `MakeRequest` / `itemSearch` to `MakeAPICallV2` conversion:
 - **Pattern**: Scenarios often have Pipedrive modules nested inside multiple layers of Routers.
 - **Fix**: Ensure the migration script uses a recursive `process_blueprint` function that looks specifically for common container keys like `modules`, `elements`, and `routes`.
 
-## 7. Person Data Injection (V2 Path Breaking Change)
+## 9. Person Data Injection (V2 Path Breaking Change)
 In Pipedrive v2, `GetDeal` no longer returns embedded person data. Scenarios that rely on `{{X.person_id.phone}}` or `{{2.person_id.email}}` will break.
 
 ### Injection Logic
@@ -146,7 +241,7 @@ V2 Person modules use different field names for contact info:
 - **Name**: `{{X.person_id.name}}` (V1) → `{{Y.name}}` (V2)
 *Note: `X` is the original Deal module ID; `Y` is the new injected Person module ID.*
 
-## 8. Smart Field Injection (Enum/Set Resolution)
+## 10. Smart Field Injection (Enum/Set Resolution)
 Pipedrive v2 requires Option **IDs** (integers) for `enum` (single select) and `set` (multi select) fields. V1 accepted Labels.
 
 ### Implementation Strategy
@@ -170,7 +265,7 @@ For `pipedrive:MakeAPICallV2` and native `http:MakeRequest` modules:
 - **Conversion**: Always apply `.upper()` to any method string during migration.
 - **Cleaning**: Ensure v1 query parameters like `api_token` are stripped from the URL string even if they are hardcoded.
 
-## 9. Output Reference Rewriting (Label Recovery)
+## 11. Output Reference Rewriting (Label Recovery)
 Pipedrive v2 API returns custom field values as IDs (int) inside the `custom_fields` object, whereas v1 returns the Label (string) or a complex object with `.label` accessor.
 
 ### Issue
@@ -182,15 +277,57 @@ In v2, this reference breaks because:
 ### Fix
 The migration script detects these references and rewrites them into a dynamic lookup formula using the injected "Get Fields" helper module (which caches field definitions).
 
-**Formula**:
+**Formula (CORRECT)**:
 ```
 {{get(map(get(map(103.body.data; "options"; "field_code"; "HASH"); 1); "label"; "id"; 4.custom_fields.HASH); 1)}}
 ```
 
 **Logic**:
-1. `map(103.body.data; "options"; "field_code"; "HASH")` -> Finds the field definition matches the hash.
-2. `get(...; 1)` -> Extracts the field definition object.
+1. `map(103.body.data; "options"; "field_code"; "HASH")` -> Finds the field definition that matches the hash.
+2. `get(...; 1)` -> Extracts the field definition object (first element from the map array).
 3. `map(options; "label"; "id"; VALUE)` -> Maps the option list, finding the "label" where "id" matches the V2 output value.
 4. Outer `get(...; 1)` -> Unwraps the single-element array result of `map()`.
 
-**CRITICAL**: Both the inner AND outer `map()` calls must be wrapped in `get(...; 1)` to extract single values from the arrays returned by `map()`.
+**CRITICAL**: 
+- Use `"field_code"` (NOT `"key"` or `"field_key"`) to match field definitions by hash
+- Both the inner AND outer `map()` calls must be wrapped in `get(...; 1)` to extract single values from the arrays returned by `map()`
+
+## 12. Diagnostic "Compose a String" Module (`inject_field_map_module`)
+
+The migration injects a diagnostic module that shows ALL Pipedrive module outputs for debugging.
+
+### What It Shows
+- **All Pipedrive modules** (not just V2 get modules): creates, updates, lists, searches, API calls, auto-injected person modules, and helper API call modules
+- For each module: designer name, module type
+- **Only referenced fields** — fields actually used downstream in the scenario
+- **Standard fields**: mapped as `{{MODULE_ID.field}}`
+- **Custom fields**: mapped as `{{MODULE_ID.custom_fields.HASH}}`
+- **Companion fields**: correctly mapped (e.g., `{{MODULE_ID.custom_fields.HASH.currency}}`)
+
+### Placement
+The diagnostic module is placed after the **last Pipedrive module** with referenced outputs in the scenario flow.
+
+### Key Implementation Detail
+The `custom_fields` mapper value is a **dict** for write modules and a **string** for read modules. Must use `isinstance(cf_param, str)` before calling `.split()`:
+```python
+cf_param = mod.get('mapper', {}).get('custom_fields', '')
+if cf_param and isinstance(cf_param, str):
+    for h in cf_param.split(','):
+        ...
+```
+
+## 13. Batching Custom Fields (API Limit: 15)
+
+The Pipedrive V2 API limits `custom_fields` to 15 hashes per request.
+
+### Implementation
+1. If ≤15 hashes: set `custom_fields` directly on the module
+2. If >15 hashes: split into batches, inject additional V2 get modules
+3. **CRITICAL**: Overflow batch modules must use the **original module type** (e.g., `getProductV2`), NOT hardcoded `getDealV2`
+```python
+new_mod = {
+    'module': mod.get('module', 'pipedrive:getDealV2'),  # Use actual module type
+    ...
+}
+```
+4. References to batch 2+ hashes are rewritten to point to the new module IDs

@@ -7,11 +7,11 @@ description: Use when referencing or updating the dictionary of Pipedrive v1 to 
 
 This skill maintains the mapping rules for converting Legacy v1 modules to API v2 or generic `MakeAPICallV2` modules.
 
-## 1. Direct v2 Equivalents
+## 1. Direct v2 Equivalents (PIPEDRIVE_MODULE_UPGRADES)
 | V1 Module Name | V2 Module Name | Notes |
 | :--- | :--- | :--- |
 | `GetDeal` | `getDealV2` | |
-| `UpdateDeal` | `updateDealV2` | **No `include_fields`** — only getDealV2 supports it |
+| `UpdateDeal` | `updateDealV2` | **No `include_fields`** — only get modules support it |
 | `CreateActivity` | `createActivityV2` | |
 | `UpdateActivity` | `updateActivityV2` | |
 | `GetActivity` | `getActivityV2` | |
@@ -34,6 +34,13 @@ This skill maintains the mapping rules for converting Legacy v1 modules to API v
 | `DeleteFile` | `deleteFileV2` | |
 | `DownloadFile` | `downloadFileV2` | |
 | `MakeAPICall` | `MakeAPICallV2` | |
+| `GetPerson` / `getPerson` | `GetPersonV2` | **Direct upgrade** (not generic API) |
+
+### GetPerson Special Handling (CRITICAL)
+`GetPerson` and `getPerson` are mapped to **native `GetPersonV2`** module, NOT to a generic `MakeAPICallV2`. This ensures:
+- Custom field handling works correctly
+- The module appears in the V2_GET_MODULES set for `include_fields`/`custom_fields` processing
+- Interface metadata is preserved for companion field detection
 
 ## 2. Generic API Call Replacements (MakeAPICallV2)
 Modules that do not have a direct V2 equivalent in Make.com are converted to `pipedrive:MakeAPICallV2` using the following routes:
@@ -41,17 +48,32 @@ Modules that do not have a direct V2 equivalent in Make.com are converted to `pi
 - **Persons**:
   - `CreatePerson` → `POST /v2/persons`
   - `UpdatePerson` → `PATCH /v2/persons/{{id}}`
-  - `GetPerson` → `GET /v2/persons/{{id}}`
   - `SearchPersons` → `GET /v2/persons/search` (**no direct v2 module exists**)
 - **Notes**:
   - `CreateNote` → `POST /v2/notes`
   - `UpdateNote` → `PATCH /v2/notes/{{id}}`
   - `GetNote` → `GET /v2/notes/{{id}}`
 
-## 3. Parameter Scoping Rules (CRITICAL)
+## 3. V2 Get Modules Set (for custom field processing)
+These modules are treated as "V2 get modules" that support `include_fields`, `custom_fields`, and need custom field reference rewriting:
 
-### `include_fields` — Only for `getDealV2`
-The `include_fields` parameter tells Pipedrive which custom fields to return. It is **ONLY valid for read operations** like `getDealV2`.
+```python
+V2_GET_MODULES = {
+    'pipedrive:getDealV2',
+    'pipedrive:getProductV2',
+    'pipedrive:getPersonV2',
+    'pipedrive:GetPersonV2',      # Capital G (Make.com casing for auto-injected)
+    'pipedrive:getOrganizationV2',
+    'pipedrive:getActivityV2',
+}
+```
+
+**CRITICAL**: `GetPersonV2` uses **Capital G** — both `getPersonV2` and `GetPersonV2` must be in the set because auto-injected person modules use `GetPersonV2` while direct upgrades may use either.
+
+## 4. Parameter Scoping Rules (CRITICAL)
+
+### `include_fields` — Only for V2 Get Modules
+The `include_fields` parameter tells Pipedrive which fields to return. It is **ONLY valid for read operations**.
 
 **NEVER add `include_fields` to:**
 - `updateDealV2` — causes `400: Parameter 'include_fields' is not allowed`
@@ -61,9 +83,14 @@ The `include_fields` parameter tells Pipedrive which custom fields to return. It
 
 **Implementation rule:**
 ```python
-# Use exact module name match, NOT substring match
-if new_module == 'pipedrive:getDealV2':  # ✅ Correct
-    # Add include_fields to parameters, expect, and restore
+# Check against the full v2_get_modules tuple
+v2_get_modules = (
+    'pipedrive:getDealV2', 'pipedrive:getProductV2',
+    'pipedrive:getPersonV2', 'pipedrive:GetPersonV2',
+    'pipedrive:getOrganizationV2', 'pipedrive:getActivityV2',
+)
+if new_module in v2_get_modules:  # ✅ Correct
+    # Add include_fields and custom_fields to parameters, expect, and restore
 
 if 'Deal' in new_module:  # ❌ WRONG — catches updateDealV2 too!
 ```
@@ -73,7 +100,7 @@ This applies to THREE places in `migrate_pipedrive.py`:
 2. `new_restore_expect["include_fields"]` — the restore metadata
 3. `new_expect.append(...)` — the expect schema entry
 
-## 4. Learned Patterns
+## 5. Learned Patterns
 
 ### Renaming Rules
 - **Activity Deal ID**: When migrating `ListActivityDeals` to `listActivitiesV2`, the filter field `id` (which represented the Deal ID in V1) MUST be renamed to `deal_id` in the v2 mapper to maintain functionality.
@@ -97,21 +124,29 @@ This applies to THREE places in `migrate_pipedrive.py`:
 ### Custom Field Types in V2 (CRITICAL)
 Understanding which field types require object wrapping vs plain values is essential:
 
-| Field Type | V2 Mapper Format | V2 Expect Type | Unwrap? |
+| Field Type | V2 Mapper Format (WRITE) | V2 Output Format (READ) | Unwrap on write? |
 | :--- | :--- | :--- | :--- |
-| `text` | `"hash": "value"` | Keep original | ✅ Yes |
-| `number` | `"hash": 123` | Keep original | ✅ Yes |
-| `date` | `"hash": "2026-01-15"` | Keep original | ✅ Yes |
-| `enum` | `"hash": 5877` (ID) | Keep original | ✅ Yes |
-| `set` | `"hash": "1,2,3"` | Keep original | ✅ Yes |
-| `time` | `"hash": {"value": "16:15"}` | `collection` | ❌ No |
-| `monetary` | `"hash": {"value": 100, "currency": "USD"}` | `collection` | ❌ No |
-| `address` | `"hash": {"value": "123 Main", ...}` | `collection` | ❌ No |
+| `text` | `"hash": "value"` | `"value"` (string) | ✅ Yes |
+| `number` | `"hash": 123` | `123` (number) | ✅ Yes |
+| `date` | `"hash": "2026-01-15"` | `"2026-01-15"` (string) | ✅ Yes |
+| `enum` | `"hash": 5877` (ID) | `5877` (integer) | ✅ Yes |
+| `set` | `"hash": "1,2,3"` | `"1,2,3"` (string) | ✅ Yes |
+| `time` | `"hash": {"value": "16:15"}` | `{"value": "15:15:00", "timezone_id": 240, ...}` | ❌ No |
+| `monetary` | `"hash": {"value": 100, "currency": "USD"}` | `{"value": 180, "currency": "ILS"}` | ❌ No |
+| `address` | `"hash": {"value": "123 Main", ...}` | `{"value": "addr text", "locality": "City", ...}` | ❌ No |
 
 **Sending a plain string for a `time` field causes:** `400: Time custom field value expected 'object'`
 **Sending an object for a `text` field causes:** `400: Invalid collection`
 
-## 5. Case Sensitivity Warning (CRITICAL)
+### V2 READ output — Object fields need `.value` (CRITICAL)
+When READING object-type fields, V2 returns JSON objects. Downstream references must use `.value`:
+- `{{MOD.custom_fields.HASH}}` for monetary → gives `{"value": 180, "currency": "ILS"}` ❌
+- `{{MOD.custom_fields.HASH.value}}` for monetary → gives `180` ✅
+- `{{MOD.custom_fields.HASH.currency}}` for monetary → gives `"ILS"` ✅
+
+Same applies to time (`.value`, `.timezone_id`) and address (`.value`, `.locality`, `.formatted_address`, etc.)
+
+## 6. Case Sensitivity Warning (CRITICAL)
 Make.com is case-sensitive for module identifiers. 
 - **Correct**: `pipedrive:GetPersonV2` (Capital **G**)
 - **Incorrect**: `pipedrive:getPersonV2` (Results in "Module Not Found")
@@ -121,9 +156,16 @@ Make.com is case-sensitive for module identifiers.
 The migration script is designed to handle both TitleCase (e.g., `GetDeal`) and camelCase (e.g., `getDeal`) versions of v1 Pipedrive modules, as both are found in older blueprints.
 
 
-## 6. HTTP Module Conversion
+## 7. HTTP Module Conversion
 Native HTTP modules (`http:MakeRequest`, `http:ActionSendData`) targeting `pipedrive.com` must be converted:
 - **Target**: `pipedrive:MakeAPICallV2`
 - **Path Transformation**: Remove protocol/domain and force `/v2/` prefix (e.g., `https://api.pipedrive.com/v1/deals` → `/v2/deals`).
 - **Token Striping**: Search for and remove `api_token` from both the URL string and the query string parameters.
 - **Method Case**: Ensure the `method` is UPPERCASE.
+
+## 8. Fields API — `field_code` (CRITICAL)
+The Pipedrive V2 fields API (`/v2/dealFields`, etc.) returns field definitions with a `field_code` property that corresponds to the 40-char hash used in custom field names. When building lookup formulas:
+
+- **Use `field_code`** to match field definitions by hash
+- **NOT `key`** or `field_key` — these are different properties in the V2 API
+- Example: `map(HELPER.body.data; "options"; "field_code"; "HASH")`
