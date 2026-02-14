@@ -142,6 +142,158 @@ DEAL_MODULES_WITH_PERSON = [
     'pipedrive:listDealsV2',
 ]
 
+# V2 Breaking Change: Deal field renames
+# These fields changed names between v1 and v2 — references must be rewritten
+DEAL_FIELD_RENAMES = {
+    'user_id': 'owner_id',
+    'deleted': 'is_deleted',
+    'label': 'label_ids',
+    'cc_email': 'smart_bcc_email',
+}
+
+# V2 Breaking Change: These deal fields were objects in v1 but are now plain integer IDs.
+# References like {{mod.org_id.name}} must be flattened to {{mod.org_id}} (data is lost).
+# person_id is excluded — handled separately by inject_get_person_modules.
+DEAL_FLATTENED_OBJECT_FIELDS = ['creator_user_id', 'org_id', 'user_id']
+
+# All deal module names (v1 and v2) that may need field reference rewriting
+DEAL_MODULE_NAMES = [
+    'pipedrive:GetDeal', 'pipedrive:getDeal', 'pipedrive:getDealV2',
+    'pipedrive:UpdateDeal', 'pipedrive:updateDeal', 'pipedrive:updateDealV2',
+    'pipedrive:SearchDeals', 'pipedrive:searchDeals', 'pipedrive:searchDealsV2',
+    'pipedrive:ListDeals', 'pipedrive:listDeals', 'pipedrive:listDealsV2',
+    'pipedrive:CreateDeal', 'pipedrive:createDeal', 'pipedrive:createDealV2',
+    'pipedrive:DeleteDeal', 'pipedrive:deleteDeal', 'pipedrive:deleteDealV2',
+    'pipedrive:ListDealsForProduct', 'pipedrive:listDealsForProductV2',
+    'pipedrive:listDealsForPerson', 'pipedrive:listDealsForPersonV2',
+]
+
+# V2 Breaking Change: Person field renames
+PERSON_FIELD_RENAMES = {
+    'phone': 'phones',
+    'email': 'emails',
+    'im': 'ims',
+    'active_flag': 'is_deleted',
+    'label': 'label_ids',
+    'cc_email': 'smart_bcc_email',
+}
+
+# Person fields that were objects in v1 but are now plain integer IDs
+PERSON_FLATTENED_OBJECT_FIELDS = ['owner_id', 'org_id', 'picture_id']
+
+# All person module names (v1 and v2) that may need field reference rewriting
+PERSON_MODULE_NAMES = [
+    'pipedrive:GetPerson', 'pipedrive:getPerson', 'pipedrive:GetPersonV2', 'pipedrive:getPersonV2',
+    'pipedrive:DeletePerson', 'pipedrive:deletePerson', 'pipedrive:deletePersonV2',
+    'pipedrive:CreatePerson', 'pipedrive:createPerson',
+    'pipedrive:UpdatePerson', 'pipedrive:updatePerson',
+    'pipedrive:SearchPersons', 'pipedrive:searchPersons',
+    'pipedrive:ListPersons', 'pipedrive:listPersons',
+]
+
+# V2 Breaking Change: Organization field renames
+ORG_FIELD_RENAMES = {
+    'active_flag': 'is_deleted',
+    'label': 'label_ids',
+    'cc_email': 'smart_bcc_email',
+}
+ORG_FLATTENED_OBJECT_FIELDS = ['owner_id', 'picture_id']
+ORG_MODULE_NAMES = [
+    'pipedrive:GetOrganization', 'pipedrive:getOrganization', 'pipedrive:getOrganizationV2',
+    'pipedrive:DeleteOrganization', 'pipedrive:deleteOrganization', 'pipedrive:deleteOrganizationV2',
+    'pipedrive:CreateOrganization', 'pipedrive:createOrganization',
+    'pipedrive:UpdateOrganization', 'pipedrive:updateOrganization',
+    'pipedrive:SearchOrganizations', 'pipedrive:searchOrganizations', 'pipedrive:searchOrganizationsV2',
+    'pipedrive:ListOrganizations', 'pipedrive:listOrganizations',
+]
+
+# V2 Breaking Change: Activity field renames
+ACTIVITY_FIELD_RENAMES = {
+    'busy_flag': 'busy',
+    'created_by_user_id': 'creator_user_id',
+    'user_id': 'owner_id',
+    'active_flag': 'is_deleted',
+}
+ACTIVITY_FLATTENED_OBJECT_FIELDS = ['owner_id', 'user_id']
+ACTIVITY_MODULE_NAMES = [
+    'pipedrive:GetActivity', 'pipedrive:getActivity', 'pipedrive:getActivityV2',
+    'pipedrive:CreateActivity', 'pipedrive:createActivity', 'pipedrive:createActivityV2',
+    'pipedrive:UpdateActivity', 'pipedrive:updateActivity', 'pipedrive:updateActivityV2',
+    'pipedrive:DeleteActivity', 'pipedrive:deleteActivity', 'pipedrive:deleteActivityV2',
+    'pipedrive:ListActivityDeals', 'pipedrive:listActivitiesV2',
+    'pipedrive:ListActivities', 'pipedrive:listActivities',
+]
+
+# V2 Breaking Change: Product field renames
+PRODUCT_FIELD_RENAMES = {
+    'selectable': 'is_linkable',
+    'active_flag': 'is_deleted',
+}
+PRODUCT_FLATTENED_OBJECT_FIELDS = ['owner_id']
+PRODUCT_MODULE_NAMES = [
+    'pipedrive:GetProduct', 'pipedrive:getProduct', 'pipedrive:getProductV2',
+    'pipedrive:CreateProduct', 'pipedrive:createProduct', 'pipedrive:createProductV2',
+    'pipedrive:UpdateProduct', 'pipedrive:updateProduct', 'pipedrive:updateProductV2',
+    'pipedrive:DeleteProduct', 'pipedrive:deleteProduct', 'pipedrive:deleteProductV2',
+    'pipedrive:SearchProducts', 'pipedrive:searchProducts', 'pipedrive:searchProductsV2',
+    'pipedrive:ListProducts', 'pipedrive:listProducts',
+]
+
+# V2 Breaking Change: Deal Product field renames
+DEAL_PRODUCT_FIELD_RENAMES = {
+    'enabled_flag': 'is_enabled',
+    'last_edit': 'update_time',
+    'active_flag': 'is_deleted',
+}
+DEAL_PRODUCT_FLATTENED_OBJECT_FIELDS = []
+DEAL_PRODUCT_MODULE_NAMES = [
+    'pipedrive:AddProductToDeal', 'pipedrive:addProductToDeal',
+    'pipedrive:ListProductsInDeal', 'pipedrive:listProductsInDeal', 'pipedrive:listProductsInDealV2',
+]
+
+# V2 Breaking Change: Pipeline field renames
+PIPELINE_FIELD_RENAMES = {
+    'selected': 'is_selected',
+    'active': 'is_deleted',
+    'active_flag': 'is_deleted',
+    'deal_probability': 'is_deal_probability_enabled',
+}
+PIPELINE_FLATTENED_OBJECT_FIELDS = []
+PIPELINE_MODULE_NAMES = [
+    'pipedrive:GetPipeline', 'pipedrive:getPipeline',
+    'pipedrive:ListPipelines', 'pipedrive:listPipelines',
+    'pipedrive:CreatePipeline', 'pipedrive:createPipeline',
+    'pipedrive:UpdatePipeline', 'pipedrive:updatePipeline',
+    'pipedrive:DeletePipeline', 'pipedrive:deletePipeline',
+]
+
+# V2 Breaking Change: Stage field renames
+STAGE_FIELD_RENAMES = {
+    'rotten_flag': 'is_deal_rot_enabled',
+    'rotten_days': 'days_to_rotten',
+    'active_flag': 'is_deleted',
+}
+STAGE_FLATTENED_OBJECT_FIELDS = []
+STAGE_MODULE_NAMES = [
+    'pipedrive:GetStage', 'pipedrive:getStage',
+    'pipedrive:ListStages', 'pipedrive:listStages',
+    'pipedrive:CreateStage', 'pipedrive:createStage',
+    'pipedrive:UpdateStage', 'pipedrive:updateStage',
+    'pipedrive:DeleteStage', 'pipedrive:deleteStage',
+]
+
+# Registry of all entity rename configs for clean iteration
+ENTITY_RENAME_CONFIGS = [
+    ('Deal', DEAL_MODULE_NAMES, DEAL_FIELD_RENAMES, DEAL_FLATTENED_OBJECT_FIELDS),
+    ('Person', PERSON_MODULE_NAMES, PERSON_FIELD_RENAMES, PERSON_FLATTENED_OBJECT_FIELDS),
+    ('Organization', ORG_MODULE_NAMES, ORG_FIELD_RENAMES, ORG_FLATTENED_OBJECT_FIELDS),
+    ('Activity', ACTIVITY_MODULE_NAMES, ACTIVITY_FIELD_RENAMES, ACTIVITY_FLATTENED_OBJECT_FIELDS),
+    ('Product', PRODUCT_MODULE_NAMES, PRODUCT_FIELD_RENAMES, PRODUCT_FLATTENED_OBJECT_FIELDS),
+    ('DealProduct', DEAL_PRODUCT_MODULE_NAMES, DEAL_PRODUCT_FIELD_RENAMES, DEAL_PRODUCT_FLATTENED_OBJECT_FIELDS),
+    ('Pipeline', PIPELINE_MODULE_NAMES, PIPELINE_FIELD_RENAMES, PIPELINE_FLATTENED_OBJECT_FIELDS),
+    ('Stage', STAGE_MODULE_NAMES, STAGE_FIELD_RENAMES, STAGE_FLATTENED_OBJECT_FIELDS),
+]
+
 def is_custom_field(key):
     if not isinstance(key, str):
         return False
@@ -490,6 +642,101 @@ def rewrite_person_references(blueprint_json_str, deal_module_id, person_module_
     return result
 
 
+def find_module_ids_by_names(flow, module_names):
+    """
+    Recursively find all module IDs in the flow matching the given module names.
+    Returns a set of integer module IDs.
+    """
+    ids = set()
+    for mod in flow:
+        if mod.get('module', '') in module_names:
+            ids.add(mod.get('id'))
+        if 'routes' in mod:
+            for route in mod.get('routes', []):
+                if 'flow' in route:
+                    ids.update(find_module_ids_by_names(route['flow'], module_names))
+        if 'onerror' in mod:
+            ids.update(find_module_ids_by_names(mod['onerror'], module_names))
+    return ids
+
+
+# Backward-compat alias
+def find_deal_module_ids(flow):
+    return find_module_ids_by_names(flow, DEAL_MODULE_NAMES)
+
+
+def rewrite_entity_field_references(blueprint_json_str, module_ids, field_renames, flattened_object_fields, entity_label='Entity'):
+    """
+    Rewrite entity field references that were renamed in Pipedrive API v2.
+    
+    Handles two categories:
+    1. Simple renames: {{ID.old_field}} -> {{ID.new_field}}
+    2. Flattened objects: {{ID.field.name}} -> {{ID.field}} (nested data lost in v2)
+    
+    Args:
+        blueprint_json_str: The blueprint as a JSON string
+        module_ids: Set of module IDs to apply renames for
+        field_renames: Dict mapping old field names to new names
+        flattened_object_fields: List of field names that were objects, now plain IDs
+        entity_label: Label for logging (e.g., 'Deal', 'Person')
+    
+    Returns:
+        tuple: (modified_json_str, rename_count)
+    """
+    import re
+    result = blueprint_json_str
+    rename_count = 0
+    
+    for mod_id in module_ids:
+        # 1. Flattened object fields — must come BEFORE simple renames
+        #    so that {{ID.user_id.name}} gets handled before {{ID.user_id}}
+        for field in flattened_object_fields:
+            # Determine the new field name (may also be renamed)
+            new_field = field_renames.get(field, field)
+            
+            # Match {{ID.field.value}} -> flatten to just the ID
+            pattern = rf'\{{\{{{mod_id}\.{field}\.value\}}\}}'
+            replacement = f'{{{{{mod_id}.{new_field}}}}}'
+            new_result = re.sub(pattern, replacement, result)
+            if new_result != result:
+                count = len(re.findall(pattern, result))
+                rename_count += count
+                print(f"[FIELD RENAME] {entity_label} module {mod_id}: {field}.value -> {new_field} ({count} refs)")
+                result = new_result
+            
+            # Match {{ID.field.name}} or {{ID.field.email}} etc — data is lost, flatten
+            pattern = rf'\{{\{{{mod_id}\.{field}\.([a-zA-Z_]+)\}}\}}'
+            matches = re.findall(pattern, result)
+            if matches:
+                for sub_field in set(matches):
+                    specific_pattern = rf'\{{\{{{mod_id}\.{field}\.{sub_field}\}}\}}'
+                    result = re.sub(specific_pattern, f'{{{{{mod_id}.{new_field}}}}}', result)
+                    rename_count += 1
+                    print(f"[FIELD RENAME] {entity_label} module {mod_id}: {field}.{sub_field} -> {new_field} (flattened, data lost)")
+        
+        # 2. Simple field renames: {{ID.old}} -> {{ID.new}}
+        for old_name, new_name in field_renames.items():
+            pattern = rf'\{{\{{{mod_id}\.{old_name}\}}\}}'
+            replacement = f'{{{{{mod_id}.{new_name}}}}}'
+            new_result = re.sub(pattern, replacement, result)
+            if new_result != result:
+                count = len(re.findall(pattern, result))
+                rename_count += count
+                print(f"[FIELD RENAME] {entity_label} module {mod_id}: {old_name} -> {new_name} ({count} refs)")
+                result = new_result
+    
+    return result, rename_count
+
+
+# Backward-compat wrappers
+def rewrite_deal_field_references(blueprint_json_str, deal_module_ids):
+    return rewrite_entity_field_references(
+        blueprint_json_str, deal_module_ids,
+        DEAL_FIELD_RENAMES, DEAL_FLATTENED_OBJECT_FIELDS, 'Deal'
+    )
+
+
+
 def check_http_pipedrive_modules(modules, filename, results=None):
     """
     Scans modules for HTTP calls targeting Pipedrive API and checks if they use v2 endpoints.
@@ -725,6 +972,12 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None, 
                  if 'user_id' in clean_data:
                       clean_data['owner_id'] = clean_data.pop('user_id')
             
+            # V2: visible_to changed from string to integer
+            if 'visible_to' in clean_data:
+                vt = clean_data['visible_to']
+                if isinstance(vt, str) and vt.isdigit():
+                    clean_data['visible_to'] = int(vt)
+            
             body = clean_data
             
             if custom_field_groups:
@@ -764,6 +1017,18 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None, 
                 # v2 search API uses 'match' instead of 'exact_match'
                 if key == 'exact_match':
                     qs_items.append({"key": "match", "value": "exact" if value else "fuzzy"})
+                elif key == 'start':
+                    print(f"[{filename}] WARNING: Removed 'start' pagination param from GET qs. V2 uses cursor-based pagination.")
+                    continue
+                elif key == 'sort':
+                    if isinstance(value, str) and ' ' in value.strip():
+                        parts = value.strip().split(' ', 1)
+                        qs_items.append({"key": "sort_by", "value": parts[0]})
+                        qs_items.append({"key": "sort_direction", "value": parts[1].lower()})
+                    else:
+                        qs_items.append({"key": "sort_by", "value": str_val})
+                        qs_items.append({"key": "sort_direction", "value": "asc"})
+                    print(f"[{filename}] Split 'sort' into sort_by + sort_direction in GET qs")
                 else:
                     qs_items.append({"key": key, "value": str_val})
             
@@ -784,6 +1049,33 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None, 
             # Special handling for ListActivityDeals: rename 'id' to 'deal_id'
             if old_module == 'pipedrive:ListActivityDeals' and key == 'id':
                 new_mapper['deal_id'] = value
+            # V2: visible_to changed from string to integer
+            elif key == 'visible_to':
+                if isinstance(value, str) and value.isdigit():
+                    new_mapper[key] = int(value)
+                    print(f"[{filename}] Converted visible_to from string '{value}' to integer {int(value)}")
+                else:
+                    new_mapper[key] = value
+            # V2: Pagination 'start' is removed (cursor-based now)
+            elif key == 'start':
+                print(f"[{filename}] WARNING: Removed 'start' pagination param from module {module_id}. V2 uses cursor-based pagination.")
+                continue
+            # V2: sort -> sort_by + sort_direction
+            elif key == 'sort':
+                if isinstance(value, str):
+                    val = value.strip()
+                    if ' ' in val:
+                        parts = val.split(' ', 1)
+                        new_mapper['sort_by'] = parts[0]
+                        new_mapper['sort_direction'] = parts[1].lower()
+                    else:
+                        new_mapper['sort_by'] = val
+                        new_mapper['sort_direction'] = 'asc'
+                    print(f"[{filename}] Split 'sort' -> sort_by='{new_mapper['sort_by']}', sort_direction='{new_mapper['sort_direction']}'")
+                else:
+                    # Dynamic value or formula — just rename to sort_by, user must fix direction
+                    new_mapper['sort_by'] = value
+                    print(f"[{filename}] WARNING: Renamed 'sort' to 'sort_by' with dynamic value. Add 'sort_direction' manually.")
             else:
                 new_mapper[key] = value
 
@@ -2197,6 +2489,24 @@ def migrate_scenario_object(data, scenario_info, override_connection_id=None, sm
     
     if 'flow' in data:
         modified, migration_count = process_modules(data['flow'], scenario_info, override_connection_id, smart_fields_map, injection_helper_id)
+    
+    # Post-processing: Rewrite entity field references that changed names in v2
+    if 'flow' in data:
+        blueprint_str = json.dumps(data)
+        total_renames = 0
+        
+        for entity_label, module_names, field_renames, flattened_fields in ENTITY_RENAME_CONFIGS:
+            entity_ids = find_module_ids_by_names(data['flow'], module_names)
+            if entity_ids:
+                blueprint_str, count = rewrite_entity_field_references(
+                    blueprint_str, entity_ids, field_renames, flattened_fields, entity_label
+                )
+                total_renames += count
+        
+        if total_renames > 0:
+            data = json.loads(blueprint_str)
+            modified = True
+            print(f"[INFO] Rewrote {total_renames} entity field reference(s) for v2 compatibility")
         
     if smart_fields_enabled and injection_helper_id:
         modified = True # We definitely modified it by adding the module
