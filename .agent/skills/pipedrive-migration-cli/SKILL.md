@@ -31,10 +31,12 @@ Migrated blueprints are saved to the `./migrated_scenarios/` directory with the 
 ## 3. Migration Workflow
 1. **Fetch**: The script retrieves the blueprint (API or File).
 2. **Transform**: Recursive processing of all modules (including those in Routers) using `PIPEDRIVE_MODULE_UPGRADES`.
+   - During transformation, structural mapper fixes are applied: `visible_to` string→int, `start` removal, `sort` splitting.
 3. **Post-Processing**: `fix_getDealV2_custom_fields()` handles custom field rewriting, companion field detection, and batching (see `pipedrive-blueprint-transform` skill).
-4. **Diagnostic Injection**: `inject_field_map_module()` adds a "Compose a String" module showing all Pipedrive field mappings.
-5. **Save**: The script writes the new structure to disk.
-6. **Manual Upload**: The user must manually upload the migrated blueprint to Make.com.
+4. **Entity Field Renames**: `rewrite_entity_field_references()` rewrites V1→V2 field name changes across all 8 entity types via `ENTITY_RENAME_CONFIGS` (see `pipedrive-blueprint-transform` skill Section 6).
+5. **Diagnostic Injection**: `inject_field_map_module()` adds a "Compose a String" module showing all Pipedrive field mappings.
+6. **Save**: The script writes the new structure to disk.
+7. **Manual Upload**: The user must manually upload the migrated blueprint to Make.com.
     - *Note*: Webhook URLs are preserved during manual upload.
 
 ## 4. Batch Migration (`batch_migrate_customer.py`)

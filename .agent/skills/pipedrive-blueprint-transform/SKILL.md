@@ -192,10 +192,57 @@ if generic_config:
         del module['metadata']['interface']
 ```
 
-## 6. Field Renaming
-Some modules require specific field key changes:
-- **ListActivityDeals → listActivitiesV2**: The `id` field representing the deal ID must be renamed to `deal_id`.
-- **Products (POST/PUT/PATCH)**: The field `user_id` must be renamed to `owner_id`.
+## 6. Entity Field Reference Rewriting (V2 Field Renames)
+
+Many Pipedrive fields changed names in V2. The migration script automatically rewrites all references (`{{MOD.field}}`) in the serialized blueprint JSON using regex-based string replacement.
+
+### Architecture
+- **Engine**: `rewrite_entity_field_references(json_str, module_ids, renames, flattened, label)` — generic function shared by all entities.
+- **Module finder**: `find_module_ids_by_names(flow, module_names)` — recursively finds all module IDs matching given names (handles router nesting).
+- **Registry**: `ENTITY_RENAME_CONFIGS` — list of `(label, module_names, field_renames, flattened_fields)` tuples. Integration in `migrate_scenario_object` loops through all entries.
+
+### Entity Configurations (8 entities)
+
+| Entity | Constants | Key Renames |
+|--------|-----------|-------------|
+| **Deal** | `DEAL_FIELD_RENAMES`, `DEAL_FLATTENED_OBJECT_FIELDS`, `DEAL_MODULE_NAMES` | `user_id`→`owner_id`, `deleted`→`is_deleted`, `label`→`label_ids`, `cc_email`→`smart_bcc_email` |
+| **Person** | `PERSON_FIELD_RENAMES`, `PERSON_FLATTENED_OBJECT_FIELDS`, `PERSON_MODULE_NAMES` | `phone`→`phones`, `email`→`emails`, `im`→`ims`, `active_flag`→`is_deleted`, `label`→`label_ids`, `cc_email`→`smart_bcc_email` |
+| **Organization** | `ORG_FIELD_RENAMES`, `ORG_FLATTENED_OBJECT_FIELDS`, `ORG_MODULE_NAMES` | `active_flag`→`is_deleted`, `label`→`label_ids`, `cc_email`→`smart_bcc_email` |
+| **Activity** | `ACTIVITY_FIELD_RENAMES`, `ACTIVITY_FLATTENED_OBJECT_FIELDS`, `ACTIVITY_MODULE_NAMES` | `busy_flag`→`busy`, `created_by_user_id`→`creator_user_id`, `user_id`→`owner_id`, `active_flag`→`is_deleted` |
+| **Product** | `PRODUCT_FIELD_RENAMES`, `PRODUCT_FLATTENED_OBJECT_FIELDS`, `PRODUCT_MODULE_NAMES` | `selectable`→`is_linkable`, `active_flag`→`is_deleted` |
+| **DealProduct** | `DEAL_PRODUCT_FIELD_RENAMES`, `DEAL_PRODUCT_FLATTENED_OBJECT_FIELDS`, `DEAL_PRODUCT_MODULE_NAMES` | `enabled_flag`→`is_enabled`, `last_edit`→`update_time`, `active_flag`→`is_deleted` |
+| **Pipeline** | `PIPELINE_FIELD_RENAMES`, `PIPELINE_FLATTENED_OBJECT_FIELDS`, `PIPELINE_MODULE_NAMES` | `selected`→`is_selected`, `active`/`active_flag`→`is_deleted`, `deal_probability`→`is_deal_probability_enabled` |
+| **Stage** | `STAGE_FIELD_RENAMES`, `STAGE_FLATTENED_OBJECT_FIELDS`, `STAGE_MODULE_NAMES` | `rotten_flag`→`is_deal_rot_enabled`, `rotten_days`→`days_to_rotten`, `active_flag`→`is_deleted` |
+
+### Flattened Object Fields
+Fields that were objects in V1 (e.g. `org_id` with `.name`, `.value`) but are now plain integer IDs in V2. References like `{{MOD.org_id.name}}` are flattened to `{{MOD.org_id}}`.
+
+### Adding a New Entity
+To add a new entity, just add 3 constants and one tuple to `ENTITY_RENAME_CONFIGS`:
+```python
+NEW_ENTITY_FIELD_RENAMES = { 'old_field': 'new_field' }
+NEW_ENTITY_FLATTENED_OBJECT_FIELDS = ['owner_id']
+NEW_ENTITY_MODULE_NAMES = ['pipedrive:GetNewEntity', ...]
+
+# Add to registry:
+ENTITY_RENAME_CONFIGS.append(('NewEntity', NEW_ENTITY_MODULE_NAMES, NEW_ENTITY_FIELD_RENAMES, NEW_ENTITY_FLATTENED_OBJECT_FIELDS))
+```
+
+### Cross-Entity Isolation
+Renames are scoped to module IDs — a deal field rename will NOT affect a person module with the same field name, because the regex matches specific module IDs.
+
+## 6A. Structural V2 Mapper Fixes
+
+These fixes are applied in 3 code paths: native v2 module mapper loop, generic GET→query-string, and MakeAPICallV2 POST/PATCH body.
+
+### `visible_to`: String → Integer
+V2 changed `visible_to` from string (`"3"`) to integer (`3`). The script converts any string-digit value to int during mapper transformation.
+
+### `start`: Removed (Cursor-Based Pagination)
+V2 uses cursor-based pagination instead of offset-based. Any `start` parameter is removed with a warning logged.
+
+### `sort`: Split into `sort_by` + `sort_direction`
+V1 used a single `sort` field (`"add_time DESC"`). V2 requires separate `sort_by` and `sort_direction` fields. The script parses and splits the value. Defaults to `asc` if no direction specified.
 
 ## 7. Search & Sort Parameter Migration
 For `MakeRequest` / `itemSearch` to `MakeAPICallV2` conversion:

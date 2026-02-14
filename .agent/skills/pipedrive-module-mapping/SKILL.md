@@ -103,14 +103,37 @@ This applies to THREE places in `migrate_pipedrive.py`:
 ## 5. Learned Patterns
 
 ### Renaming Rules
-- **Activity Deal ID**: When migrating `ListActivityDeals` to `listActivitiesV2`, the filter field `id` (which represented the Deal ID in V1) MUST be renamed to `deal_id` in the v2 mapper to maintain functionality.
-- **Product Owner**: For `createProductV2` or usage of `/v2/products`, `user_id` MUST be renamed to `owner_id`.
+
+#### Module-Level Renames (in mapper during migration)
+- **Activity Deal ID**: When migrating `ListActivityDeals` to `listActivitiesV2`, the filter field `id` MUST be renamed to `deal_id`.
+- **Product Owner**: For `createProductV2` or `/v2/products`, `user_id` MUST be renamed to `owner_id`.
+
+#### Entity Field Reference Renames (post-processing on serialized JSON)
+All entities automatically rewrite V1→V2 field name changes via `ENTITY_RENAME_CONFIGS`. See `pipedrive-blueprint-transform` skill Section 6 for the full table. Key renames include:
+- **All entities**: `active_flag`→`is_deleted`, `label`→`label_ids`
+- **Deals/Activities**: `user_id`→`owner_id`
+- **Persons**: `phone`→`phones`, `email`→`emails`
+- **Activities**: `busy_flag`→`busy`, `created_by_user_id`→`creator_user_id`
+- **Products**: `selectable`→`is_linkable`
+- **Pipelines**: `selected`→`is_selected`, `deal_probability`→`is_deal_probability_enabled`
+- **Stages**: `rotten_flag`→`is_deal_rot_enabled`, `rotten_days`→`days_to_rotten`
+
+#### Structural Mapper Fixes (applied during module upgrade)
+- **`visible_to`**: String `"3"` → integer `3` (all entities)
+- **`start`**: Removed (V2 uses cursor-based pagination)
+- **`sort`**: Split into `sort_by` + `sort_direction`
 
 ### Item Search Migration
 - **Pattern**: `http:MakeRequest` calls to `/v1/itemSearch` are generally searching for deals.
 - **Conversion**: These should be migrated to `GET /v2/deals/search`.
 - **Query Params**: `exact_match=true` (V1) must be converted to `match=exact` (V2).
 - **Pagination**: Note that V2 search results are wrapped in a `data.items` array. The `start` parameter (offset) is replaced by cursor-based pagination.
+
+### Remaining Known Gaps (NOT automated)
+These V2 changes are documented but not automated due to risk/complexity:
+- **Multiple-option fields**: Comma-separated string `"123,456"` → integer array `[123,456]`. Requires knowing field type at migration time.
+- **Date/time range `_until` companion**: New subfield for date range and time range custom fields.
+- **Fields API renames**: `key`→`field_code`, `name`→`field_name`, `edit_flag`→`is_custom_field`. Only matters if scenarios use field management modules.
 
 ### GET-based Generic Replacements (CRITICAL)
 - When a module is converted to `MakeAPICallV2` with method `GET`, the **original mapper parameters must be preserved as query string (`qs`)** items.
