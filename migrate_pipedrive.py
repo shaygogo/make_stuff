@@ -950,8 +950,11 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None, 
                     "spec": custom_fields_spec
                 })
 
-        # Add ID field if missing
-        if not found_id:
+        # Add ID field if missing — but ONLY for single-entity modules (get/update/delete),
+        # NOT for list/search modules which don't require an entity ID
+        mod_action = new_module.split(':')[-1].lower()
+        is_list_or_search = mod_action.startswith('list') or mod_action.startswith('search')
+        if not found_id and not is_list_or_search:
             entity_label = new_module.split(':')[-1].replace('V2', '').replace('get', '').strip()
             if not entity_label:
                 entity_label = 'Item'
@@ -1527,9 +1530,29 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
     
     # Track injected helpers per entity type: endpoint -> helper_module_id
     entity_helpers = {}
+    entity_helper_count = 0  # Track how many extra helpers we've added (for y-offset)
     if injection_helper_id:
         # The existing helper is for dealFields
         entity_helpers['/v2/dealFields'] = injection_helper_id
+    
+    # Find the existing deal fields helper position for relative placement
+    def find_module_position(flow, target_id):
+        """Find the designer position of a module by its ID."""
+        for m in flow:
+            if m.get('id') == target_id:
+                designer = m.get('metadata', {}).get('designer', {})
+                return designer.get('x', 0), designer.get('y', 0)
+            if 'routes' in m:
+                for route in m.get('routes', []):
+                    if 'flow' in route:
+                        result = find_module_position(route['flow'], target_id)
+                        if result:
+                            return result
+            if 'onerror' in m:
+                result = find_module_position(m['onerror'], target_id)
+                if result:
+                    return result
+        return None
     
     # PASS 1: Inject any missing entity-type helpers (modifies blueprint_data structure)
     for mod in v2_modules:
@@ -1560,9 +1583,59 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
         max_id += 1
         helper_id = max_id
         entity_helpers[fields_endpoint] = helper_id
+        entity_helper_count += 1
         
         conn_id = mod.get('parameters', {}).get('__IMTCONN__', '')
         entity_name = fields_endpoint.split('/')[-1]
+        
+        # Position relative to the existing deal fields helper, inline with the flow
+        helper_pos = find_module_position(blueprint_data.get('flow', []), injection_helper_id)
+        if helper_pos:
+            base_x, base_y = helper_pos
+        else:
+            base_x, base_y = 300, 0
+        
+        # Detect layout direction by checking the module after the deal fields helper
+        # to determine if the flow is horizontal or vertical
+        layout_axis = 'x'  # default horizontal
+        next_mod_pos = None
+        
+        def find_module_after(flow, target_id):
+            """Find the module that comes right after target_id in the flow."""
+            for i, m in enumerate(flow):
+                if m.get('id') == target_id and i + 1 < len(flow):
+                    next_m = flow[i + 1]
+                    d = next_m.get('metadata', {}).get('designer', {})
+                    return d.get('x', 0), d.get('y', 0)
+                if 'routes' in m:
+                    for route in m.get('routes', []):
+                        if 'flow' in route:
+                            result = find_module_after(route['flow'], target_id)
+                            if result:
+                                return result
+                if 'onerror' in m:
+                    result = find_module_after(m['onerror'], target_id)
+                    if result:
+                        return result
+            return None
+        
+        next_mod_pos = find_module_after(blueprint_data.get('flow', []), injection_helper_id)
+        if next_mod_pos:
+            nx, ny = next_mod_pos
+            if abs(ny - base_y) > abs(nx - base_x):
+                layout_axis = 'y'
+        
+        # Place each additional helper inline, offset by 300px per helper in the flow direction
+        if layout_axis == 'x':
+            new_helper_x = base_x + (300 * entity_helper_count)
+            new_helper_y = base_y
+            # Shift all modules to the right to make room
+            shift_modules_visual_position(blueprint_data['flow'], new_helper_x - 10, 300, axis='x')
+        else:
+            new_helper_x = base_x
+            new_helper_y = base_y + (300 * entity_helper_count)
+            # Shift all modules below to make room
+            shift_modules_visual_position(blueprint_data['flow'], new_helper_y - 10, 300, axis='y')
         
         helper_mod = {
             'id': helper_id,
@@ -1571,7 +1644,7 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
             'parameters': {'__IMTCONN__': conn_id},
             'mapper': {'url': fields_endpoint, 'method': 'GET'},
             'metadata': {
-                'designer': {'x': 300, 'y': 450, 'name': f'Get {entity_name} (Smart Cache)'},
+                'designer': {'x': new_helper_x, 'y': new_helper_y, 'name': f'Get {entity_name} (Smart Cache)'},
                 'restore': {
                     'expect': {'url': fields_endpoint, 'method': 'GET'},
                     'parameters': {
@@ -1589,7 +1662,7 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
         }
         
         if insert_after_module(blueprint_data['flow'], injection_helper_id, helper_mod):
-            print(f"[INFO] Injected '{entity_name}' helper (ID: {helper_id}) for .label lookups")
+            print(f"[INFO] Injected '{entity_name}' helper (ID: {helper_id}) at x={new_helper_x}, y={new_helper_y} ({layout_axis}-flow)")
             fixed_any = True
         else:
             blueprint_data['flow'].insert(2, helper_mod)
@@ -1906,6 +1979,10 @@ def inject_field_map_module(blueprint_data):
         mod_type = mod.get('module', '')
         mod_short = mod_type.split(':')[-1]
         designer_name = mod.get('metadata', {}).get('designer', {}).get('name', '')
+        
+        # Skip "Get Fields" helper modules (Smart Cache) — they're internal helpers
+        if 'Smart Cache' in designer_name:
+            continue
         
         # Check if this module's output is actually referenced anywhere
         ref_pattern = f'{mod_id}.'
