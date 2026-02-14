@@ -12,26 +12,90 @@ Pipedrive v2 modules in Make.com use a deeply nested structure for custom fields
 
 - **Mapper Object**: All custom fields (identified by 40-character hashes) must be placed inside a `custom_fields` object.
 - **Value Wrapping (Conditional)**:
-    - **Simple Fields** (Text, Number, Options): Map directly as key-value pairs.
+    - **Simple Fields** (Text, Number, Date, Enum, Set, etc.): Map directly as key-value pairs. The value is **unwrapped** from the v1 `{"value": X}` format.
         - *Format*: `"custom_fields": { "hash": "{{val}}" }`
-    - **Complex Fields** (Money, Time Range): Must be wrapped in an object containing `value` and additional properties (currency, etc.).
-        - *Format*: `"custom_fields": { "hash": { "value": 100, "currency": "USD" } }`
+    - **Complex Fields** (Time, Monetary, Address): MUST remain as objects. These are **NOT unwrapped**.
+        - *Time Format*: `"custom_fields": { "hash": { "value": "16:15" } }`
+        - *Money Format*: `"custom_fields": { "hash": { "value": 100, "currency": "USD" } }`
+        - *Address Format*: `"custom_fields": { "hash": { "value": "123 Main St", ... } }`
 - **Special Fields (Consolidation)**: 
     - Fields with suffixes (e.g., `hash_currency`, `hash_until`) must be grouped with their parent hash.
-    - If a group contains *only* the value (no currency), it is treated as a Simple Field and unwrapped to the direct value.
+    - If a group contains *only* the value (no currency) AND the field type is NOT time/monetary/address, it is treated as a Simple Field and unwrapped to the direct value.
+
+### Complex Field Types That Must Stay as Objects (CRITICAL)
+The following field types MUST be sent as `{"value": ...}` objects, NOT plain values:
+- `time` — e.g. `{"value": "16:15"}`
+- `monetary` — e.g. `{"value": 100, "currency": "USD"}`
+- `address` — e.g. `{"value": "123 Main St"}`
+
+The code identifies these via `field_types` dict built from `old_expect` metadata:
+```python
+field_types = {f['name']: f.get('type') for f in old_expect if 'name' in f}
+is_complex_type = (field_types.get(hash_key) in ['time', 'monetary', 'address'])
+```
+
+### Empty Value Filtering
+If a time field has an empty or null value (`""`, `None`, `"null"`), it should be **omitted entirely** from `custom_fields` rather than sent as `{"value": ""}`, which causes validation errors.
 
 ## 2. Metadata Structure
 The `metadata` object must be updated to ensure the UI renders the custom fields correctly:
 - **Restore Section**: Custom field IDs must be listed under `metadata.restore.expect.custom_fields.nested`.
-- **Expect Array**: The `expect` array must contain a `custom_fields` collection. The `spec` for each custom field should define it as a collection with a `value` key.
-- **Include Fields**: The `parameters` object MUST include `include_fields`, which is an array of all custom field hashes mapped in that module.
+- **Expect Array**: The `expect` array must contain a `custom_fields` collection. The `spec` for each custom field **must match its actual type**:
+  - **Simple fields** (text, number, enum, set, date): Keep the original `type` from the v1 definition.
+  - **Complex fields** (time, monetary, address): Force `type: "collection"` with a `spec` containing a `value` sub-field.
+  
+  ```python
+  complex_types = {'collection', 'monetary', 'address', 'time'}
+  if original_type in complex_types or (has multiple spec items):
+      f_copy['type'] = 'collection'
+      f_copy['spec'] = [{"name": "value", "type": ..., "label": "Value"}]
+  # else: keep original type (text, number, date, enum, etc.)
+  ```
+
+- **Custom Fields for getDealV2 (CRITICAL)**: In Pipedrive V2 API, custom field values are NOT returned by default. You must explicitly request them via the `custom_fields` query parameter. The migration handles this in `fix_getDealV2_custom_fields()` post-processing:
+  1. **Static analysis**: Scans the entire blueprint for `MODULE_ID.HASH` patterns (40-char hex) referencing each getDealV2 module
+  2. **Reference rewriting**: Rewrites flat `MODULE_ID.HASH` → `MODULE_ID.custom_fields.HASH` (V2 nests custom fields)
+  3. **API limit (15)**: If >15 unique hashes referenced, splits into batches by injecting additional getDealV2 modules (same deal ID, different custom fields)
+  4. Sub-fields like `_timezone_id` and `_currency` suffixes don't count as separate custom fields
+
+### getDealV2 Custom Fields (CRITICAL)
+```python
+# Post-processing in fix_getDealV2_custom_fields():
+# 1. Scan blueprint for referenced hashes
+# 2. Set custom_fields param with only used hashes (max 15 per module)
+# 3. Rewrite flat refs to nested: 2.HASH → 2.custom_fields.HASH
+# 4. If >15: inject extra getDealV2 modules for additional batches
+#    References to batch 2+ hashes point to the new module IDs
+
+# ❌ WRONG: Don't request ALL custom fields (API limit is 15)
+# ❌ WRONG: Don't use flat references (V2 nests under custom_fields)
+# ❌ WRONG: Don't put custom field hashes in include_fields (that's for standard fields)
+```
 
 ## 3. MakeAPICallV2 Body Construction
 For modules migrated to `pipedrive:MakeAPICallV2` (e.g., Persons, Notes):
 - **Body as String**: The `body` field must be a **stringified JSON string**, NOT a JSON object.
 - **Payload Merging**: Static parameters (e.g., `visible_to`, `owner_id`) and dynamic mapper fields must be merged into a single flat object before stringification.
 - **Hebrew/Non-ASCII Encoding**: Use `ensure_ascii=False` (or equivalent) to preserve Hebrew characters in the stringified body.
-- **Custom Field Wrapping**: 40-character hash keys within the `body` string must also be wrapped with `{"value": ...}`.
+- **Custom Field Wrapping**: 40-character hash keys within the `body` string must also follow the complex/simple field rules above.
+
+### MakeAPICallV2 Metadata Schema (CRITICAL)
+When a module is converted to `MakeAPICallV2` via generic configuration, its `expect` metadata must be **entirely replaced** with the MakeAPICallV2 schema. Keeping the old module's expect fields causes "id is missing" errors.
+
+```python
+if generic_config:
+    new_expect = [
+        {"type": "hidden"},
+        {"name": "url", "type": "text", "label": "URL", "required": True},
+        {"name": "method", "type": "select", "label": "Method"},
+        {"name": "headers", "type": "array", "label": "Headers"},
+        {"name": "qs", "type": "array", "label": "Query String"},
+        {"name": "body", "type": "any", "label": "Body"},
+    ]
+    # Also clear the old interface
+    if 'interface' in module.get('metadata', {}):
+        del module['metadata']['interface']
+```
 
 ## 4. Field Renaming
 Some modules require specific field key changes:
@@ -120,10 +184,13 @@ The migration script detects these references and rewrites them into a dynamic l
 
 **Formula**:
 ```
-{{map(get(map(103.body.data; "options"; "field_code"; "HASH"); 1); "label"; "id"; 4.custom_fields.HASH)}}
+{{get(map(get(map(103.body.data; "options"; "field_code"; "HASH"); 1); "label"; "id"; 4.custom_fields.HASH); 1)}}
 ```
 
 **Logic**:
 1. `map(103.body.data; "options"; "field_code"; "HASH")` -> Finds the field definition matches the hash.
 2. `get(...; 1)` -> Extracts the field definition object.
 3. `map(options; "label"; "id"; VALUE)` -> Maps the option list, finding the "label" where "id" matches the V2 output value.
+4. Outer `get(...; 1)` -> Unwraps the single-element array result of `map()`.
+
+**CRITICAL**: Both the inner AND outer `map()` calls must be wrapped in `get(...; 1)` to extract single values from the arrays returned by `map()`.

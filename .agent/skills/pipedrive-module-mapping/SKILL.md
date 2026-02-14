@@ -11,7 +11,7 @@ This skill maintains the mapping rules for converting Legacy v1 modules to API v
 | V1 Module Name | V2 Module Name | Notes |
 | :--- | :--- | :--- |
 | `GetDeal` | `getDealV2` | |
-| `UpdateDeal` | `updateDealV2` | |
+| `UpdateDeal` | `updateDealV2` | **No `include_fields`** — only getDealV2 supports it |
 | `CreateActivity` | `createActivityV2` | |
 | `UpdateActivity` | `updateActivityV2` | |
 | `GetActivity` | `getActivityV2` | |
@@ -42,10 +42,36 @@ Modules that do not have a direct V2 equivalent in Make.com are converted to `pi
   - `CreatePerson` → `POST /v2/persons`
   - `UpdatePerson` → `PATCH /v2/persons/{{id}}`
   - `GetPerson` → `GET /v2/persons/{{id}}`
+  - `SearchPersons` → `GET /v2/persons/search` (**no direct v2 module exists**)
 - **Notes**:
   - `CreateNote` → `POST /v2/notes`
   - `UpdateNote` → `PATCH /v2/notes/{{id}}`
   - `GetNote` → `GET /v2/notes/{{id}}`
+
+## 3. Parameter Scoping Rules (CRITICAL)
+
+### `include_fields` — Only for `getDealV2`
+The `include_fields` parameter tells Pipedrive which custom fields to return. It is **ONLY valid for read operations** like `getDealV2`.
+
+**NEVER add `include_fields` to:**
+- `updateDealV2` — causes `400: Parameter 'include_fields' is not allowed`
+- `searchDealsV2`
+- `listDealsV2`
+- Any write/create/delete module
+
+**Implementation rule:**
+```python
+# Use exact module name match, NOT substring match
+if new_module == 'pipedrive:getDealV2':  # ✅ Correct
+    # Add include_fields to parameters, expect, and restore
+
+if 'Deal' in new_module:  # ❌ WRONG — catches updateDealV2 too!
+```
+
+This applies to THREE places in `migrate_pipedrive.py`:
+1. `module['parameters']['include_fields']` — the actual parameter
+2. `new_restore_expect["include_fields"]` — the restore metadata
+3. `new_expect.append(...)` — the expect schema entry
 
 ## 4. Learned Patterns
 
@@ -58,6 +84,32 @@ Modules that do not have a direct V2 equivalent in Make.com are converted to `pi
 - **Conversion**: These should be migrated to `GET /v2/deals/search`.
 - **Query Params**: `exact_match=true` (V1) must be converted to `match=exact` (V2).
 - **Pagination**: Note that V2 search results are wrapped in a `data.items` array. The `start` parameter (offset) is replaced by cursor-based pagination.
+
+### GET-based Generic Replacements (CRITICAL)
+- When a module is converted to `MakeAPICallV2` with method `GET`, the **original mapper parameters must be preserved as query string (`qs`)** items.
+- `MakeAPICallV2` expects `qs` as an array of `{"key": "param_name", "value": "val"}` objects. (**NOT** `"name"` — must be `"key"`!)
+- Without this, search terms, filters, and limits are silently lost.
+- **Example**: `searchPersons` with `term: {{3.value}}, fields: ["phone"], exact_match: true` must become:
+  ```json
+  {"qs": [{"key": "term", "value": "{{3.value}}"}, {"key": "fields", "value": "phone"}, {"key": "match", "value": "exact"}]}
+  ```
+
+### Custom Field Types in V2 (CRITICAL)
+Understanding which field types require object wrapping vs plain values is essential:
+
+| Field Type | V2 Mapper Format | V2 Expect Type | Unwrap? |
+| :--- | :--- | :--- | :--- |
+| `text` | `"hash": "value"` | Keep original | ✅ Yes |
+| `number` | `"hash": 123` | Keep original | ✅ Yes |
+| `date` | `"hash": "2026-01-15"` | Keep original | ✅ Yes |
+| `enum` | `"hash": 5877` (ID) | Keep original | ✅ Yes |
+| `set` | `"hash": "1,2,3"` | Keep original | ✅ Yes |
+| `time` | `"hash": {"value": "16:15"}` | `collection` | ❌ No |
+| `monetary` | `"hash": {"value": 100, "currency": "USD"}` | `collection` | ❌ No |
+| `address` | `"hash": {"value": "123 Main", ...}` | `collection` | ❌ No |
+
+**Sending a plain string for a `time` field causes:** `400: Time custom field value expected 'object'`
+**Sending an object for a `text` field causes:** `400: Invalid collection`
 
 ## 5. Case Sensitivity Warning (CRITICAL)
 Make.com is case-sensitive for module identifiers. 
@@ -75,5 +127,3 @@ Native HTTP modules (`http:MakeRequest`, `http:ActionSendData`) targeting `piped
 - **Path Transformation**: Remove protocol/domain and force `/v2/` prefix (e.g., `https://api.pipedrive.com/v1/deals` → `/v2/deals`).
 - **Token Striping**: Search for and remove `api_token` from both the URL string and the query string parameters.
 - **Method Case**: Ensure the `method` is UPPERCASE.
-
-

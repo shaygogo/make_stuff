@@ -255,10 +255,37 @@
         updateRadio.addEventListener('change', toggleField);
         preserveRadio.addEventListener('change', toggleField);
 
+        // Helper to get query params
+        function getQueryParam(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        const token = getQueryParam('token');
+
+        // Check for token on load
+        if (!token) {
+            showMessage('Warning: No Access Token found in URL. You may be unable to migrate.', 'error');
+        } else {
+            // Optional: Fetch credits to show welcome message
+            fetch(`/api/credits?token=${token}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.credits !== undefined) {
+                        showMessage(`Welcome ${data.agency}! Credits remaining: ${data.credits}`, 'success');
+                    }
+                });
+        }
+
         // Migration
         migrateBtn.addEventListener('click', async () => {
             if (!selectedFile) {
                 showMessage('Please select a JSON blueprint file first', 'error');
+                return;
+            }
+
+            if (!token) {
+                showMessage('Missing Access Token. Please use the link from your email.', 'error');
                 return;
             }
 
@@ -279,6 +306,7 @@
                 const formData = new FormData();
                 formData.append('file', selectedFile);
                 formData.append('connection_mode', connectionMode);
+                formData.append('token', token); // <--- ADDED TOKEN HERE
                 if (connectionMode === 'update') {
                     formData.append('new_connection_id', connectionId);
                 }
