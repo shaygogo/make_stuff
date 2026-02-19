@@ -135,6 +135,8 @@ The script detects object-type fields by scanning the module's V1 `metadata.inte
 | **Monetary** | `HASH` = `180`, `HASH_currency` = `"ILS"` | `custom_fields.HASH` = `{"value": 180, "currency": "ILS"}` |
 | **Time** | `HASH` = `"15:15:00"`, `HASH_timezone_id` = `240` | `custom_fields.HASH` = `{"value": "15:15:00", "timezone_id": 240, ...}` |
 | **Address** | `HASH` = `"בני בנימין 7, נתניה"`, `HASH_locality` = `"Netanya"` | `custom_fields.HASH` = `{"value": "בני...", "locality": "Netanya", ...}` |
+| **Date** | `HASH` = `"2024-03-15 00:00"` | `addHours(custom_fields.HASH; 0)` |
+| **Set (Multi-option)** | Array of `{id, label}` collections | Array of plain integer IDs |
 
 ### Reference Rewriting Rules
 
@@ -149,13 +151,59 @@ MOD.HASH_street_number     → MOD.custom_fields.`HASH`.street_number
 (... and all other address sub-fields)
 ```
 
-**Step 2 — Base field `.value` appending** (AFTER flat→nested rewrite):
+**Step 2 — Base field wrapping/appending** (AFTER flat→nested rewrite):
 ```
-MOD.custom_fields.`HASH`  → MOD.custom_fields.`HASH`.value
+MOD.custom_fields.`HASH`  → MOD.custom_fields.`HASH`.value (for Complex fields)
+MOD.custom_fields.`HASH`  → addHours(MOD.custom_fields.`HASH`; 0) (for Date fields)
 ```
-Uses negative lookahead to avoid double-appending on refs that already have a subfield:
+Uses negative lookahead to avoid double-appending/double-wrapping.
+
+For **Date fields**, the script wraps references in `addHours(REF; 0)`. This forces Make.com to treat the date-only string from V2 as a datetime with a `00:00` component, matching V1 behavior and preventing formulas like `setHour()` or `addDays()` from breaking.
+
+**Step 3 — Set (multi-option) field rewrites** (detected via `metadata.type == 'set'`):
+```
+MOD.HASH[].id             → MOD.custom_fields.`HASH`    (V2 values are already IDs)
+map(MOD.HASH; "id")       → MOD.custom_fields.`HASH`    (V2 values are already IDs)
+MOD.HASH[].label          → Code module output ref       (see Section 11A below)
+```
+The `[].label` pattern requires a **Code module** to resolve each integer ID to its option label at runtime. The `getFields` helper is automatically injected when `.label` references are detected in PASS 1.
+
+## 11A. Set Field `[].label` — Code Module Injection (CRITICAL)
+
+V1 set fields gave `{{MOD.HASH[].label}}` which returned comma-separated labels directly. V2 returns integer arrays `[1659, 1981]`, so a Code module must map IDs→labels at runtime.
+
+### Architecture
+1. **Detection** (in PASS 2 loop): Regex scans `blueprint_str` for `MOD.\`HASH\`[].label` patterns
+2. **Code module creation**: `create_set_label_code_module()` generates a `code:ExecuteCode` module
+3. **Reference rewrite**: `MOD.\`HASH\`[].label` → `{{CODE_MOD_ID.labels_HASHPREFIX}}`
+4. **Injection**: Code module is queued in `code_modules_to_inject` and inserted after string sync
+
+### Code Module Inputs
+```
+ids_HASHPREFIX:     {{MOD.custom_fields.`HASH`}}              ← the integer array from the deal
+options_HASHPREFIX: {{get(map(HELPER.body.data; "options"; "field_code"; "HASH"); 1)}}  ← options from fields API
+```
+
+### JavaScript Logic (Robust)
+- Handles IDs as array, comma-separated string, single value, or null
+- Uses `Number()` comparison (NOT `===`) to handle string/number type mismatches
+- `Array.isArray()` check on options before using
+
+### `custom_fields` Hash Tracking (CRITICAL GOTCHA)
+When `[].label` is rewritten to Code module ref, the original hash **disappears from `blueprint_str`**. The PASS 3 custom_fields scanner won't find it, so the V2 API won't return that field → Code module gets `null`.
+
+**Fix**: `code_module_extra_hashes` dict tracks hashes per module ID. These are merged into `all_hashes` during PASS 3 so they appear in the `custom_fields` parameter.
+
+### `blueprint_data` In-Place Updates (CRITICAL GOTCHA)
+When syncing `blueprint_str` back to `blueprint_data`, **NEVER reassign** the variable:
 ```python
-value_pattern = rf'({mod_id}\.custom_fields\.`?{h}`?)(?!\.(value|currency|timezone_id|timezone_name|label|formatted_address|street_number|route|sublocality|locality|admin_area_level_1|admin_area_level_2|country|postal_code|subpremise))'
+# ❌ WRONG — creates new dict, caller loses reference
+blueprint_data = json.loads(blueprint_str)
+
+# ✅ CORRECT — updates dict in-place, caller's reference preserved
+_updated = json.loads(blueprint_str)
+blueprint_data.clear()
+blueprint_data.update(_updated)
 ```
 
 ### Address Field Companion Suffixes (Complete List)

@@ -104,9 +104,22 @@ This applies to THREE places in `migrate_pipedrive.py`:
 
 ### Renaming Rules
 
-#### Module-Level Renames (in mapper during migration)
-- **Activity Deal ID**: When migrating `ListActivityDeals` to `listActivitiesV2`, the filter field `id` MUST be renamed to `deal_id`.
-- **Product Owner**: For `createProductV2` or `/v2/products`, `user_id` MUST be renamed to `owner_id`.
+#### Module-Level Renames (via `MODULE_PARAM_RENAMES` registry)
+Parameter renames for specific modules are defined in the `MODULE_PARAM_RENAMES` dict at the top of `migrate_pipedrive.py`. This registry is automatically applied in **all 3 places** (mapper, expect schema, restore expect). To add a new rename, just add one line to the dict.
+
+Current entries (populated from Pipedrive V2 migration guide):
+
+| V1 Module | `id` renamed to | V2 Target |
+| :--- | :--- | :--- |
+| `ListActivityDeals` | `deal_id` | `listActivitiesV2` |
+| `ListActivityPersons` | `person_id` | `listActivitiesV2` |
+| `ListActivityOrganizations` | `org_id` | `listActivitiesV2` |
+| `ListPersonDeals` / `listDealsForPerson` | `person_id` | `listDealsV2` / `listDealsForPersonV2` |
+| `ListOrganizationDeals` | `org_id` | `listDealsV2` |
+| `ListPipelineDeals` | `pipeline_id` | `listDealsV2` |
+| `ListStageDeals` | `stage_id` | `listDealsV2` |
+
+- **Product Owner**: For `createProductV2` or `/v2/products`, `user_id` MUST be renamed to `owner_id` (handled separately in code).
 
 #### Entity Field Reference Renames (post-processing on serialized JSON)
 All entities automatically rewrite V1→V2 field name changes via `ENTITY_RENAME_CONFIGS`. See `pipedrive-blueprint-transform` skill Section 6 for the full table. Key renames include:

@@ -81,6 +81,7 @@ PIPEDRIVE_MODULE_UPGRADES = {
     # Inferred / Others
     'pipedrive:UpdateActivity': 'pipedrive:updateActivityV2',
     'pipedrive:ListActivityDeals': 'pipedrive:listActivitiesV2',
+    'pipedrive:listActivityDeals': 'pipedrive:listActivitiesV2',
     'pipedrive:ListLeadLabels': 'pipedrive:listLeadLabelsV2',
     'pipedrive:ListProductsInDeal': 'pipedrive:listProductsInDealV2',
     'pipedrive:GetOrganization': 'pipedrive:getOrganizationV2',
@@ -89,6 +90,22 @@ PIPEDRIVE_MODULE_UPGRADES = {
     'pipedrive:listDealsForPerson': 'pipedrive:listDealsForPersonV2',
     'pipedrive:GetPerson': 'pipedrive:GetPersonV2',
     'pipedrive:getPerson': 'pipedrive:GetPersonV2',
+
+    # V1 "list by entity" → unified V2 list with filter (Pipedrive V2 migration guide)
+    # Activities by person/org
+    'pipedrive:ListActivityPersons': 'pipedrive:listActivitiesV2',
+    'pipedrive:listActivityPersons': 'pipedrive:listActivitiesV2',
+    'pipedrive:ListActivityOrganizations': 'pipedrive:listActivitiesV2',
+    'pipedrive:listActivityOrganizations': 'pipedrive:listActivitiesV2',
+    # Deals by person/org/pipeline/stage
+    'pipedrive:ListPersonDeals': 'pipedrive:listDealsV2',
+    'pipedrive:listPersonDeals': 'pipedrive:listDealsV2',
+    'pipedrive:ListOrganizationDeals': 'pipedrive:listDealsV2',
+    'pipedrive:listOrganizationDeals': 'pipedrive:listDealsV2',
+    'pipedrive:ListPipelineDeals': 'pipedrive:listDealsV2',
+    'pipedrive:listPipelineDeals': 'pipedrive:listDealsV2',
+    'pipedrive:ListStageDeals': 'pipedrive:listDealsV2',
+    'pipedrive:listStageDeals': 'pipedrive:listDealsV2',
 }
 
 # Modules that don't have a direct v2 equivalent and must use MakeAPICallV2
@@ -106,6 +123,37 @@ PIPEDRIVE_GENERIC_REPLACEMENTS = {
     # Search Persons - no direct v2 module exists in Make.com
     'pipedrive:searchPersons': {'url': '/v2/persons/search', 'method': 'GET'},
     'pipedrive:SearchPersons': {'url': '/v2/persons/search', 'method': 'GET'},
+}
+
+# Parameter renames when upgrading modules.
+# Maps old_module -> {old_param: new_param}
+# Used in mapper, expect schema, and restore expect — all 3 places automatically.
+# Source: Pipedrive API V2 migration guide — v1 "list by entity" endpoints
+# were split into unified v2 list endpoints with explicit filter params.
+MODULE_PARAM_RENAMES = {
+    # --- Activities: v1 /deals/:id/activities → v2 /activities?deal_id= ---
+    'pipedrive:ListActivityDeals':         {'id': 'deal_id'},
+    'pipedrive:listActivityDeals':         {'id': 'deal_id'},
+    # v1 /persons/:id/activities → v2 /activities?person_id=
+    'pipedrive:ListActivityPersons':       {'id': 'person_id'},
+    'pipedrive:listActivityPersons':       {'id': 'person_id'},
+    # v1 /organizations/:id/activities → v2 /activities?org_id=
+    'pipedrive:ListActivityOrganizations': {'id': 'org_id'},
+    'pipedrive:listActivityOrganizations': {'id': 'org_id'},
+
+    # --- Deals: v1 /persons/:id/deals → v2 /deals?person_id= ---
+    'pipedrive:ListPersonDeals':           {'id': 'person_id'},
+    'pipedrive:listPersonDeals':           {'id': 'person_id'},
+    'pipedrive:listDealsForPerson':        {'id': 'person_id'},
+    # v1 /organizations/:id/deals → v2 /deals?org_id=
+    'pipedrive:ListOrganizationDeals':     {'id': 'org_id'},
+    'pipedrive:listOrganizationDeals':     {'id': 'org_id'},
+    # v1 /pipelines/:id/deals → v2 /deals?pipeline_id=
+    'pipedrive:ListPipelineDeals':         {'id': 'pipeline_id'},
+    'pipedrive:listPipelineDeals':         {'id': 'pipeline_id'},
+    # v1 /stages/:id/deals → v2 /deals?stage_id=
+    'pipedrive:ListStageDeals':            {'id': 'stage_id'},
+    'pipedrive:listStageDeals':            {'id': 'stage_id'},
 }
 
 # V2 Breaking Change: GetDeal no longer returns embedded person details
@@ -220,7 +268,9 @@ ACTIVITY_MODULE_NAMES = [
     'pipedrive:CreateActivity', 'pipedrive:createActivity', 'pipedrive:createActivityV2',
     'pipedrive:UpdateActivity', 'pipedrive:updateActivity', 'pipedrive:updateActivityV2',
     'pipedrive:DeleteActivity', 'pipedrive:deleteActivity', 'pipedrive:deleteActivityV2',
-    'pipedrive:ListActivityDeals', 'pipedrive:listActivitiesV2',
+    'pipedrive:ListActivityDeals', 'pipedrive:listActivityDeals', 'pipedrive:listActivitiesV2',
+    'pipedrive:ListActivityPersons', 'pipedrive:listActivityPersons',
+    'pipedrive:ListActivityOrganizations', 'pipedrive:listActivityOrganizations',
     'pipedrive:ListActivities', 'pipedrive:listActivities',
 ]
 
@@ -386,6 +436,78 @@ def get_option_id_by_label(field_def, label_value):
             return opt['id']
     return None
 
+def convert_set_field_value(field_def, value, filename='', hash_key=''):
+    """
+    Convert a V1 set/multi-select field value to V2 integer array format.
+    
+    V1 formats: "Option A,Option B" (labels) or "101,102" (IDs) as comma-separated strings
+    V2 format:  [101, 102] (integer array)
+    
+    Returns: (converted_value, warning_message_or_None)
+    """
+    field_name = field_def.get('name', hash_key[:12])
+    
+    # Case 1: Dynamic formula — can't convert at migration time
+    if is_dynamic_value(value):
+        warning = (
+            f"[{filename}] WARNING: Set field '{field_name}' ({hash_key[:12]}...) "
+            f"has a dynamic formula value. V2 expects an integer array. "
+            f"Manual adjustment may be needed."
+        )
+        return value, warning
+    
+    # Non-string values: leave as-is (already an array, int, etc.)
+    if not isinstance(value, str):
+        return value, None
+    
+    # Empty string: leave as-is
+    if not value.strip():
+        return value, None
+    
+    # Split by comma
+    parts = [p.strip() for p in value.split(',')]
+    
+    # Case 2: All parts are numeric IDs — cast to int array
+    if all(p.isdigit() for p in parts):
+        int_array = [int(p) for p in parts]
+        print(f"[{filename}] Set field '{field_name}': Converted ID string '{value}' -> {int_array}")
+        return int_array, None
+    
+    # Case 3: Labels — resolve each to its ID
+    options = field_def.get('options', [])
+    if not options:
+        warning = (
+            f"[{filename}] WARNING: Set field '{field_name}' ({hash_key[:12]}...) "
+            f"has labels but no options available for ID resolution."
+        )
+        return value, warning
+    
+    resolved_ids = []
+    unresolved = []
+    for label in parts:
+        found_id = None
+        for opt in options:
+            if opt.get('label') == label:
+                found_id = opt.get('id')
+                break
+        if found_id is not None:
+            resolved_ids.append(found_id)
+        else:
+            unresolved.append(label)
+    
+    if unresolved:
+        warning = (
+            f"[{filename}] WARNING: Set field '{field_name}': Could not resolve labels: "
+            f"{unresolved}. Resolved {len(resolved_ids)}/{len(parts)}."
+        )
+        if resolved_ids:
+            # Partial resolution — return what we could resolve + warning
+            return resolved_ids, warning
+        return value, warning
+    
+    print(f"[{filename}] Set field '{field_name}': Resolved labels '{value}' -> {resolved_ids}")
+    return resolved_ids, None
+
 def create_get_fields_module(module_id, connection_id, x_pos, y_pos):
     """Creates a MakeApiCallV2 module to fetch deal fields for dynamic resolution."""
     return {
@@ -420,6 +542,115 @@ def create_get_fields_module(module_id, connection_id, x_pos, y_pos):
              "expect": [
                 {"name": "url", "type": "text", "label": "URL", "required": True},
                 {"name": "method", "type": "select", "label": "Method", "required": True}
+            ]
+        }
+    }
+
+
+
+def create_set_label_code_module(module_id, set_fields_info, source_mod_id, helper_id, x_pos, y_pos):
+    """Creates a Code module that resolves set field IDs to labels.
+    
+    Args:
+        module_id: ID for the new module
+        set_fields_info: list of (hash_key, hash_prefix) tuples for set fields needing label resolution
+        source_mod_id: ID of the module that provides the set field data
+        helper_id: ID of the helper module that has the field options
+        x_pos, y_pos: visual position
+    """
+    # Build input pairs: for each set field, pass the IDs array and the options array
+    inputs = []
+    for hash_key, hash_prefix in set_fields_info:
+        inputs.append({"name": f"ids_{hash_prefix}", "value": f"{{{{{source_mod_id}.custom_fields.`{hash_key}`}}}}"})
+        inputs.append({"name": f"options_{hash_prefix}", "value": f"{{{{get(map({helper_id}.body.data; \"options\"; \"field_code\"; \"{hash_key}\"); 1)}}}}"})
+    
+    # Build JS code that resolves each set field's IDs to labels
+    # Must be robust: Make.com may pass arrays as strings, IDs as strings/numbers, etc.
+    js_lines = ["const result = {};"]
+    for hash_key, hash_prefix in set_fields_info:
+        js_lines.append(f"let raw_ids_{hash_prefix} = input.ids_{hash_prefix};")
+        js_lines.append(f"let ids_{hash_prefix} = [];")
+        js_lines.append(f"if (Array.isArray(raw_ids_{hash_prefix})) ids_{hash_prefix} = raw_ids_{hash_prefix};")
+        js_lines.append(f"else if (typeof raw_ids_{hash_prefix} === 'string' && raw_ids_{hash_prefix}.length > 0) ids_{hash_prefix} = raw_ids_{hash_prefix}.split(',').map(s => s.trim());")
+        js_lines.append(f"else if (raw_ids_{hash_prefix} != null) ids_{hash_prefix} = [raw_ids_{hash_prefix}];")
+        js_lines.append(f"let opts_{hash_prefix} = Array.isArray(input.options_{hash_prefix}) ? input.options_{hash_prefix} : [];")
+        js_lines.append(f"result.labels_{hash_prefix} = ids_{hash_prefix}.map(id => {{")
+        js_lines.append(f"    const numId = Number(id);")
+        js_lines.append(f"    const opt = opts_{hash_prefix}.find(o => Number(o.id) === numId);")
+        js_lines.append(f"    return opt ? opt.label : String(id);")
+        js_lines.append(f"}}).join('; ');")
+    js_lines.append("return result;")
+    js_code = "\n".join(js_lines)
+    
+    # Build restore items (one null per input)
+    restore_items = [None] * len(inputs)
+    
+    return {
+        "id": module_id,
+        "module": "code:ExecuteCode",
+        "version": 0,
+        "parameters": {},
+        "mapper": {
+            "language": "javascript",
+            "input": inputs,
+            "dependencies": [],
+            "inputFormat": "editor",
+            "codeEditorJavascript": js_code
+        },
+        "metadata": {
+            "designer": {
+                "x": x_pos,
+                "y": y_pos,
+                "name": "Resolve Set Labels"
+            },
+            "restore": {
+                "expect": {
+                    "language": {"mode": "chose", "label": "JavaScript"},
+                    "input": {"items": restore_items},
+                    "inputFormat": {"label": "Code editor"}
+                }
+            },
+            "expect": [
+                {
+                    "name": "language",
+                    "type": "select",
+                    "label": "Language",
+                    "required": True,
+                    "validate": {"enum": ["javascript", "python"]}
+                },
+                {
+                    "name": "input",
+                    "type": "array",
+                    "label": "Input",
+                    "spec": {
+                        "type": "collection",
+                        "label": "Variable",
+                        "spec": [
+                            {"name": "name", "type": "text", "required": True, "validate": {"pattern": "^[a-zA-Z0-9_]{1,32}$", "min": 1, "max": 32}, "label": "Name"},
+                            {"name": "value", "type": "any", "label": "Value"}
+                        ],
+                        "name": "value"
+                    }
+                },
+                {
+                    "name": "dependencies",
+                    "type": "array",
+                    "label": "Additional dependencies (Enterprise plans only)",
+                    "spec": {"type": "text", "required": True, "label": "Dependency", "validate": {"pattern": "^[A-Za-z0-9_@\\./\<\>\\=\\!~\\^+\\-]{1,214}$", "min": 1, "max": 214}, "name": "value"}
+                },
+                {
+                    "name": "inputFormat",
+                    "type": "select",
+                    "label": "Input format",
+                    "required": True,
+                    "validate": {"enum": ["editor", "string"]}
+                },
+                {
+                    "name": "codeEditorJavascript",
+                    "type": "editor",
+                    "label": "Code",
+                    "required": True
+                }
             ]
         }
     }
@@ -991,6 +1222,15 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None, 
                         # Filter empty strings
                         if val in [None, '', 'null'] and field_types.get(hash_key) == 'time':
                              continue
+                        # V2: Set fields need integer array conversion
+                        if smart_fields_map and hash_key in smart_fields_map:
+                            if smart_fields_map[hash_key].get('type') == 'set':
+                                val, warning = convert_set_field_value(
+                                    smart_fields_map[hash_key], val,
+                                    filename=filename, hash_key=hash_key
+                                )
+                                if warning:
+                                    print(warning)
                         processed_groups[hash_key] = val
                     else:
                         processed_groups[hash_key] = data
@@ -1046,9 +1286,11 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None, 
         clean_data, custom_field_groups = group_custom_fields(old_mapper)
         
         for key, value in clean_data.items():
-            # Special handling for ListActivityDeals: rename 'id' to 'deal_id'
-            if old_module == 'pipedrive:ListActivityDeals' and key == 'id':
-                new_mapper['deal_id'] = value
+            # Check MODULE_PARAM_RENAMES for any parameter that needs renaming
+            if old_module in MODULE_PARAM_RENAMES and key in MODULE_PARAM_RENAMES[old_module]:
+                new_key = MODULE_PARAM_RENAMES[old_module][key]
+                new_mapper[new_key] = value
+                print(f"[{filename}] Renamed mapper param '{key}' -> '{new_key}' for {old_module}")
             # V2: visible_to changed from string to integer
             elif key == 'visible_to':
                 if isinstance(value, str) and value.isdigit():
@@ -1099,7 +1341,7 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None, 
                          if injection_helper_id:
                              # Logic: {{get(map(HELPER.body.data; 'id'; 'label'; VAL); 1)}}
                              # Note: MakeApiCallV2 return structure needs careful pathing.
-                             # Assuming /v2/dealFields returns { "data": [ { "key": "HASH", "options": [...] } ] }
+                             # Assuming /v2/dealFields returns { "data": [ { "field_code": "HASH", "options": [...] } ] }
                              # This is complex in Make formulas without arrays manipulation.
                              # Simplified Assumption: User needs to map against the options.
                              # If we use a DataStore or Variable, it's cleaner. 
@@ -1110,22 +1352,32 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None, 
                              
                              # Let's insert a simpler "Warning/Note" into the value if we can't perfectly automate it
                              # OR try the map formula:
-                             # map(get(map(999.body.data; "options"; "key"; "HASH"); 1); "id"; "label"; VALUE)
+                             # map(get(map(999.body.data; "options"; "field_code"; "HASH"); 1); "id"; "label"; VALUE)
                              
                              transformed_val = (
-                                 f"{{{{get(map(get(map({injection_helper_id}.body.data; 'options'; 'key'; '{hash_key}'); 1); 'id'; 'label'; {val.replace('{{','').replace('}}','')}); 1)}}}}"
+                                 f"{{{{get(map(get(map({injection_helper_id}.body.data; 'options'; 'field_code'; '{hash_key}'); 1); 'id'; 'label'; {val.replace('{{','').replace('}}','')}); 1)}}}}"
                              )
                              val = transformed_val
                              print(f"[{filename}] SmartMapped Dynamic Field {hash_key} ({field_def['name']})")
                              
                      else:
-                         # Static Label: Resolve to ID
-                         found_id = get_option_id_by_label(field_def, val)
-                         if found_id:
-                             print(f"[{filename}] SmartMapped Static Field {hash_key} ({field_def['name']}): '{val}' -> {found_id}")
-                             val = found_id
+                         # Static Value: Check if set field (multi-select) or enum (single-select)
+                         if field_def.get('type') == 'set':
+                             # Set fields: convert comma-separated labels/IDs to integer array
+                             val, warning = convert_set_field_value(
+                                 field_def, val,
+                                 filename=filename, hash_key=hash_key
+                             )
+                             if warning:
+                                 print(warning)
                          else:
-                             print(f"[{filename}] WARNING: Could not resolve label '{val}' for field {field_def['name']}")
+                             # Enum fields: resolve single label to ID
+                             found_id = get_option_id_by_label(field_def, val)
+                             if found_id:
+                                 print(f"[{filename}] SmartMapped Static Field {hash_key} ({field_def['name']}): '{val}' -> {found_id}")
+                                 val = found_id
+                             else:
+                                 print(f"[{filename}] WARNING: Could not resolve label '{val}' for field {field_def['name']}")
                              
                  # --- SMART MAPPING LOGIC END ---
                  
@@ -1153,7 +1405,12 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None, 
         if is_custom_field(key):
             custom_fields_restore[key] = val
         else:
-            new_restore_expect[key] = val
+            # Check MODULE_PARAM_RENAMES for any parameter that needs renaming in restore
+            if old_module in MODULE_PARAM_RENAMES and key in MODULE_PARAM_RENAMES[old_module]:
+                new_key = MODULE_PARAM_RENAMES[old_module][key]
+                new_restore_expect[new_key] = val
+            else:
+                new_restore_expect[key] = val
             
     if custom_fields_restore:
         new_restore_expect["custom_fields"] = {"nested": custom_fields_restore}
@@ -1217,9 +1474,14 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None, 
                         f_copy['spec'] = [{"name": "value", "type": original_type if original_type != 'monetary' else 'number', "label": "Value"}]
                 # else: keep the original type (text, number, date, enum, etc.)
                 custom_fields_spec.append(f_copy)
-            elif name == 'id' and 'Deal' in new_module:
+            elif name == 'id' and ('Deal' in new_module or old_module in MODULE_PARAM_RENAMES):
                 f_copy = field.copy()
                 f_copy['type'] = 'integer'
+                # Rename via MODULE_PARAM_RENAMES if applicable
+                if old_module in MODULE_PARAM_RENAMES and 'id' in MODULE_PARAM_RENAMES[old_module]:
+                    new_name = MODULE_PARAM_RENAMES[old_module]['id']
+                    f_copy['name'] = new_name
+                    f_copy['label'] = new_name.replace('_', ' ').title()
                 new_expect.append(f_copy)
                 found_id = True
             elif name == 'include_fields':
@@ -1698,7 +1960,7 @@ def rewrite_custom_field_label_references(blueprint_data, helper_id):
     {{MODULE_ID.HASH.label}}
     
     And replaces them with a dynamic lookup formula using the injected 'Get Fields' helper:
-    {{map(get(map(HELPER.body.data; "options"; "key"; "HASH"); 1); "label"; "id"; MODULE_ID.custom_fields.HASH)}}
+    {{map(get(map(HELPER.body.data; "options"; "field_code"; "HASH"); 1); "label"; "id"; MODULE_ID.custom_fields.HASH)}}
     
     This fixes the issue where V2 modules return IDs but downstream logic expects Labels.
     """
@@ -1758,7 +2020,7 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
     
     BATCH_SIZE = 15
     
-    # All V2 "get" modules that return custom fields nested under custom_fields
+    # V2 "get" modules that need the 'custom_fields' mapper parameter (fetching hashes)
     V2_GET_MODULES = {
         'pipedrive:getDealV2',
         'pipedrive:getProductV2',
@@ -1767,18 +2029,32 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
         'pipedrive:getOrganizationV2',
         'pipedrive:getActivityV2',
     }
+
+    # All V2 entity modules that return custom fields (Get, Create, Update, Search, List)
+    V2_OUTPUT_MODULES = V2_GET_MODULES | {
+        'pipedrive:updateDealV2', 'pipedrive:createDealV2',
+        'pipedrive:updateProductV2', 'pipedrive:createProductV2',
+        'pipedrive:updatePersonV2', 'pipedrive:createPersonV2',
+        'pipedrive:updateOrganizationV2', 'pipedrive:createOrganizationV2',
+        'pipedrive:updateActivityV2', 'pipedrive:createActivityV2',
+        'pipedrive:searchDealsV2', 'pipedrive:listDealsV2',
+        'pipedrive:searchOrganizationsV2', 'pipedrive:listOrganizationsV2',
+        'pipedrive:searchPersonsV2', 'pipedrive:listPersonsV2',
+        'pipedrive:searchProductsV2', 'pipedrive:listProductsV2',
+        'pipedrive:listActivitiesV2',
+    }
     
-    def find_v2_get_modules(flow):
+    def find_v2_entity_modules(flow):
         results = []
         for m in flow:
-            if m.get('module') in V2_GET_MODULES:
+            if m.get('module') in V2_OUTPUT_MODULES:
                 results.append(m)
             if 'routes' in m:
                 for route in m.get('routes', []):
                     if 'flow' in route:
-                        results.extend(find_v2_get_modules(route['flow']))
+                        results.extend(find_v2_entity_modules(route['flow']))
             if 'onerror' in m:
-                results.extend(find_v2_get_modules(m['onerror']))
+                results.extend(find_v2_entity_modules(m['onerror']))
         return results
     
     def insert_after_module(flow, target_id, new_module):
@@ -1797,15 +2073,17 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
                     return True
         return False
     
-    v2_modules = find_v2_get_modules(blueprint_data.get('flow', []))
+    v2_modules = find_v2_entity_modules(blueprint_data.get('flow', []))
     if not v2_modules:
-        return False
+        return False, {}
     
     # Serialize blueprint for reference scanning
     blueprint_str = json.dumps(blueprint_data, ensure_ascii=False)
     fixed_any = False
     max_id = find_max_module_id(blueprint_data.get('flow', []))
     modules_to_inject = []  # list of (original_mod_id, new_module_dict)
+    code_modules_to_inject = []  # list of (source_mod_id, code_module_dict)
+    code_module_extra_hashes = {}  # mod_id -> set of extra hashes from Code module inputs
     # Track custom_fields to set per module ID (applied after string rewrite)
     custom_fields_to_set = {}  # mod_id -> comma-separated hashes
     # Pre-processing: Fix .label suffix and .customRaw references for ALL V2 modules
@@ -1854,7 +2132,8 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
             continue
         
         # Check if this module has .label references that need a helper
-        label_pattern = rf'{mod_id}\.(?:custom_fields\.)?(?:customRaw\.)?`?([a-f0-9]{{40}})`?\.label'
+        # Matches both HASH.label (single-value enum) and HASH[].label (set/multi-option)
+        label_pattern = rf'{mod_id}\.(?:custom_fields\.)?(?:customRaw\.)?`?([a-f0-9]{{40}})`?(?:\[\])?\.label'
         temp_str = json.dumps(blueprint_data, ensure_ascii=False)
         label_matches = re.findall(label_pattern, temp_str)
         
@@ -1984,6 +2263,123 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
         if not helper_id:
             continue
         
+        # Detect set (multiple option) custom fields from interface metadata
+        set_hashes = set()
+        interface = mod.get('metadata', {}).get('interface', [])
+        if isinstance(interface, list):
+            for field in interface:
+                fmeta = field.get('metadata', {})
+                if isinstance(fmeta, dict) and fmeta.get('type') == 'set':
+                    fname = field.get('name', '')
+                    if re.match(r'^[a-f0-9]{40}$', fname):
+                        set_hashes.add(fname)
+        
+        # --- Set field Pattern 2+3: Simplify [].id and map(;"id") ---
+        # V2 set fields are already plain integer arrays, so [].id is redundant
+        # and map(HASH; "id") just returns the array as-is
+        for hash_key in set_hashes:
+            # Pattern 2: MOD.HASH[].id  or  MOD.`HASH`[].id  -> MOD.custom_fields.`HASH`
+            for old_p in [
+                f'{mod_id}.custom_fields.`{hash_key}`[].id',
+                f'{mod_id}.custom_fields.{hash_key}[].id',
+                f'{mod_id}.`{hash_key}`[].id',
+                f'{mod_id}.{hash_key}[].id',
+                f'{mod_id}.customRaw.`{hash_key}`[].id',
+                f'{mod_id}.customRaw.{hash_key}[].id',
+            ]:
+                if old_p in blueprint_str:
+                    blueprint_str = blueprint_str.replace(old_p, f'{mod_id}.custom_fields.`{hash_key}`')
+                    print(f"[INFO] Module {mod_id}: Simplified set field [].id on {hash_key[:12]}... (V2 values are already IDs)")
+                    fixed_any = True
+            
+            # Pattern 3: map(MOD.HASH; "id")  -> MOD.custom_fields.`HASH`
+            # In JSON-serialized blueprint_str, quotes inside values appear as \"
+            for old_p in [
+                f'map({mod_id}.custom_fields.`{hash_key}`; \\\"id\\\")',
+                f'map({mod_id}.custom_fields.{hash_key}; \\\"id\\\")',
+                f'map({mod_id}.`{hash_key}`; \\\"id\\\")',
+                f'map({mod_id}.{hash_key}; \\\"id\\\")',
+                f'map({mod_id}.customRaw.`{hash_key}`; \\\"id\\\")',
+                f'map({mod_id}.customRaw.{hash_key}; \\\"id\\\")',
+            ]:
+                if old_p in blueprint_str:
+                    blueprint_str = blueprint_str.replace(old_p, f'{mod_id}.custom_fields.`{hash_key}`')
+                    print(f"[INFO] Module {mod_id}: Simplified set field map(;\"id\") on {hash_key[:12]}... (V2 values are already IDs)")
+                    fixed_any = True
+        
+        # --- Set field Pattern 1: [].label -> Code module injection ---
+        # V1: [{id:1, label:"A"}, ...][].label gave comma-separated labels
+        # V2: [1, 2, ...] — just IDs, no labels inline
+        # Solution: Inject a Code module that maps IDs to labels via JS
+        # 
+        # Detection: scan blueprint_str for [].label on ANY 40-char hash for this module
+        # (more robust than relying on interface metadata alone)
+        label_array_pattern = rf'{mod_id}\.(?:custom_fields\.)?(?:customRaw\.)?`?([a-f0-9]{{40}})`?\[\]\.label'
+        label_array_hashes = set(re.findall(label_array_pattern, blueprint_str))
+        # Merge with interface-detected set hashes
+        label_array_hashes.update(set_hashes)
+        
+        set_label_fields = []  # (hash_key, hash_prefix) for Code module
+        set_label_old_patterns = {}  # hash_key -> list of old patterns found
+        for hash_key in label_array_hashes:
+            for old_p in [
+                f'{mod_id}.custom_fields.`{hash_key}`[].label',
+                f'{mod_id}.custom_fields.{hash_key}[].label',
+                f'{mod_id}.`{hash_key}`[].label',
+                f'{mod_id}.{hash_key}[].label',
+                f'{mod_id}.customRaw.`{hash_key}`[].label',
+                f'{mod_id}.customRaw.{hash_key}[].label',
+            ]:
+                if old_p in blueprint_str:
+                    hash_prefix = hash_key[:8]
+                    if hash_key not in set_label_old_patterns:
+                        set_label_old_patterns[hash_key] = []
+                        set_label_fields.append((hash_key, hash_prefix))
+                    set_label_old_patterns[hash_key].append(old_p)
+        
+        if set_label_fields:
+            # Create a Code module to resolve all set fields for this source module
+            # NOTE: Do NOT modify blueprint_data here — it would break references held by v2_modules
+            # and the caller. Instead, collect the module for later injection in the end-of-function block.
+            max_id = find_max_module_id(blueprint_data.get('flow', []))
+            # Also account for any code modules already queued
+            for _, queued_mod in code_modules_to_inject:
+                qid = queued_mod.get('id', 0)
+                if qid > max_id:
+                    max_id = qid
+            code_mod_id = max_id + 1
+            # Position: slightly offset from the source module
+            src_meta = mod.get('metadata', {}).get('designer', {})
+            code_x = src_meta.get('x', 0) + 300
+            code_y = src_meta.get('y', 0) + 150
+            
+            code_mod = create_set_label_code_module(
+                code_mod_id, set_label_fields, mod_id, helper_id, code_x, code_y
+            )
+            
+            # Queue for injection at end of function (after string sync)
+            code_modules_to_inject.append((mod_id, code_mod))
+            print(f"[INFO] Module {mod_id}: Prepared Code module (ID: {code_mod_id}) to resolve {len(set_label_fields)} set field label(s)")
+            
+            # Track these hashes so they're included in custom_fields for this module
+            # (the Code module references mod_id.custom_fields.`HASH`, so the getDealV2
+            # module must request them from the API)
+            if mod_id not in code_module_extra_hashes:
+                code_module_extra_hashes[mod_id] = set()
+            for hash_key, _ in set_label_fields:
+                code_module_extra_hashes[mod_id].add(hash_key)
+            
+            # Replace all [].label references with Code module output in blueprint_str
+            for hash_key, hash_prefix in set_label_fields:
+                code_ref = f'{code_mod_id}.labels_{hash_prefix}'
+                for old_p in set_label_old_patterns[hash_key]:
+                    if old_p in blueprint_str:
+                        blueprint_str = blueprint_str.replace(old_p, code_ref)
+                        print(f"[INFO] Module {mod_id}: Rewrote set field [].label on {hash_key[:12]}... -> Code module {code_mod_id}.labels_{hash_prefix}")
+            
+            fixed_any = True
+        
+        # --- Single-value enum .label (existing logic) ---
         label_pattern = rf'{mod_id}\.(?:custom_fields\.)?`?([a-f0-9]{{40}})`?\.label'
         label_matches = re.findall(label_pattern, blueprint_str)
         
@@ -2022,10 +2418,13 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
         monetary_hashes = set()
         time_hashes = set()
         address_hashes = set()
+        date_hashes = set()
+        # Note: set_hashes detection is done earlier in PASS 2 (near .label rewriting)
         interface = mod.get('metadata', {}).get('interface', [])
         if isinstance(interface, list):
             for field in interface:
                 fname = field.get('name', '')
+                ftype = field.get('type', '')
                 if fname.endswith('_currency'):
                     base_hash = fname[:-len('_currency')]
                     if re.match(r'^[a-f0-9]{40}$', base_hash):
@@ -2038,6 +2437,9 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
                     base_hash = fname[:-len('_formatted_address')]
                     if re.match(r'^[a-f0-9]{40}$', base_hash):
                         address_hashes.add(base_hash)
+                # Detect date-type custom fields (V2 returns date-only without 00:00 time)
+                elif ftype == 'date' and re.match(r'^[a-f0-9]{40}$', fname):
+                    date_hashes.add(fname)
         
         # Rewrite companion references BEFORE flat-to-nested rewrite
         # Monetary: MOD.HASH_currency -> MOD.custom_fields.HASH.currency
@@ -2089,16 +2491,28 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
         
         all_hashes = list(set(m[1] for m in flat_matches) | set(nested_matches))
         
+        # Also include hashes that Code modules reference via their inputs
+        # (these were rewritten from [].label so they no longer appear in blueprint_str)
+        if mod_id in code_module_extra_hashes:
+            extra = code_module_extra_hashes[mod_id]
+            new_hashes = extra - set(all_hashes)
+            if new_hashes:
+                all_hashes.extend(new_hashes)
+                print(f"[INFO] Module {mod_id}: Added {len(new_hashes)} set field hash(es) to custom_fields for Code module")
+        
         if not all_hashes:
-            print(f"[INFO] getDealV2 Module {mod_id}: No custom field references found downstream")
+            print(f"[INFO] Module {mod_id}: No custom field references found downstream")
             continue
         
         fixed_any = True
         
-        if len(all_hashes) <= BATCH_SIZE:
-            # Simple case: all fit in one request
-            custom_fields_to_set[mod_id] = ','.join(all_hashes)
-            print(f"[INFO] getDealV2 Module {mod_id}: Set {len(all_hashes)} referenced custom fields")
+        if len(all_hashes) <= BATCH_SIZE or mod_type not in V2_GET_MODULES:
+            # Simple case (or non-Get module): no batching needed
+            if mod_type in V2_GET_MODULES:
+                custom_fields_to_set[mod_id] = ','.join(all_hashes)
+                print(f"[INFO] Module {mod_id} ({mod_type}): Set {len(all_hashes)} referenced custom fields")
+            else:
+                print(f"[INFO] Module {mod_id} ({mod_type}): Rewriting references for {len(all_hashes)} custom fields")
             
             # Rewrite flat references to nested
             if flat_matches:
@@ -2116,6 +2530,20 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
                     blueprint_str = re.sub(value_pattern, rf'\g<1>.value', blueprint_str)
                     field_type = "monetary" if h in monetary_hashes else ("time" if h in time_hashes else "address")
                     print(f"[INFO] Module {mod_id}: Appended .value for {field_type} field {h[:12]}...")
+            
+            # Wrap date custom field refs with addHours(REF; 0) to restore 00:00 time component
+            # V1 returned "2024-03-15 00:00" but V2 returns "2024-03-15" — this breaks setHour/addDays formulas
+            for h in date_hashes:
+                if h in all_hashes:
+                    # Match: MOD.custom_fields.`HASH` or MOD.custom_fields.HASH
+                    # but NOT already wrapped in addHours(...)
+                    date_pattern = rf'(?<!addHours\()({mod_id}\.custom_fields\.`?{h}`?)(?!\.)'
+                    new_str = blueprint_str
+                    new_str = re.sub(date_pattern, rf'addHours(\g<1>; 0)', new_str)
+                    if new_str != blueprint_str:
+                        blueprint_str = new_str
+                        print(f"[INFO] Module {mod_id}: Wrapped date field {h[:12]}... with addHours() for 00:00 compat")
+
         else:
             # Batch case: split into groups of BATCH_SIZE
             batches = [all_hashes[i:i+BATCH_SIZE] for i in range(0, len(all_hashes), BATCH_SIZE)]
@@ -2193,10 +2621,23 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
                     blueprint_str = re.sub(value_pattern, rf'\g<1>.value', blueprint_str)
                     field_type = "monetary" if h in monetary_hashes else ("time" if h in time_hashes else "address")
                     print(f"[INFO] Module {mod_id}: Appended .value for {field_type} field {h[:12]}... (batch target: {target})")
+            
+            # Wrap date custom field refs with addHours() in batch case
+            for h in date_hashes:
+                if h in all_hashes:
+                    target = hash_to_target[h]
+                    date_pattern = rf'(?<!addHours\()({target}\.custom_fields\.`?{h}`?)(?!\.)'
+                    new_str = blueprint_str
+                    new_str = re.sub(date_pattern, rf'addHours(\g<1>; 0)', new_str)
+                    if new_str != blueprint_str:
+                        blueprint_str = new_str
+                        print(f"[INFO] Module {mod_id}: Wrapped date field {h[:12]}... with addHours() for 00:00 compat (batch target: {target})")
+
     
     if fixed_any:
-        # Parse the rewritten blueprint back
+        # Parse the rewritten blueprint back (clear first to remove stale keys)
         updated = json.loads(blueprint_str)
+        blueprint_data.clear()
         blueprint_data.update(updated)
         
         # Now apply custom_fields to the actual module objects
@@ -2214,12 +2655,22 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
         
         apply_custom_fields(blueprint_data['flow'])
         
-        # Inject additional modules
+        # Inject additional modules (batch getDealV2 modules)
         for original_id, new_mod in modules_to_inject:
             if insert_after_module(blueprint_data['flow'], original_id, new_mod):
                 print(f"[INFO] Injected getDealV2 batch Module {new_mod['id']} after Module {original_id}")
+        
+        # Inject Code modules for set field label resolution
+        for source_mod_id, code_mod in code_modules_to_inject:
+            if insert_after_module(blueprint_data['flow'], source_mod_id, code_mod):
+                print(f"[INFO] Injected Code module (ID: {code_mod['id']}) after source module {source_mod_id}")
+            else:
+                # Fallback: try after any helper, or append to flow
+                blueprint_data.get('flow', []).append(code_mod)
+                print(f"[INFO] Appended Code module (ID: {code_mod['id']}) to flow (fallback)")
     
-    return fixed_any
+    
+    return fixed_any, entity_helpers
 
 
 def inject_field_map_module(blueprint_data):
@@ -2419,6 +2870,60 @@ def inject_field_map_module(blueprint_data):
     
     return True
 
+def warn_field_numeric_ids(blueprint_data, filename=''):
+    """
+    V2 Breaking Change: GET /v2/{entity}Fields/{id} now requires the field hash key,
+    not the numeric ID. The V2 Fields API does not expose numeric IDs in its response,
+    so automatic resolution is not possible.
+    
+    This function detects any /v2/{entity}Fields/{numeric_id} URLs and logs warnings
+    so the user can manually replace them with the correct field_code hash.
+    
+    Returns:
+        list: List of (entity_key, numeric_id, module_id) tuples found
+    """
+    import re
+    
+    pattern = re.compile(r'(?:https?://[^/]*pipedrive\.com)?/v[12]/(deal|person|organization|product|activity)Fields/(\d+)')
+    warnings = []
+    
+    def scan(obj, module_id=None):
+        if isinstance(obj, dict):
+            # Track module ID for context
+            mid = obj.get('id', module_id)
+            for key, val in obj.items():
+                if isinstance(val, str):
+                    for m in pattern.finditer(val):
+                        entity_key = f'{m.group(1)}Fields'
+                        numeric_id = m.group(2)
+                        warnings.append((entity_key, numeric_id, mid))
+                elif isinstance(val, (dict, list)):
+                    scan(val, mid)
+        elif isinstance(obj, list):
+            for item in obj:
+                scan(item, module_id)
+    
+    scan(blueprint_data)
+    
+    if warnings:
+        print(f"\n{'='*60}")
+        print(f"[!!] MANUAL FIX REQUIRED — Field ID → Hash Key ({filename})")
+        print(f"{'='*60}")
+        print(f"Pipedrive V2 API requires field hash keys (field_code), not numeric IDs.")
+        print(f"The following URLs use numeric IDs that will cause 404 errors:\n")
+        seen = set()
+        for entity_key, numeric_id, mod_id in warnings:
+            key = (entity_key, numeric_id)
+            if key not in seen:
+                seen.add(key)
+                print(f"  /v2/{entity_key}/{numeric_id}  (Module {mod_id})")
+                print(f"    → Replace {numeric_id} with the field's hash key from Pipedrive Settings > Data Fields")
+        print(f"\nTotal: {len(seen)} unique field URL(s) need manual hash key replacement")
+        print(f"{'='*60}\n")
+    
+    return warnings
+
+
 def migrate_scenario_object(data, scenario_info, override_connection_id=None, smart_fields_enabled=True):
     modified = False
     migration_count = 0
@@ -2518,16 +3023,21 @@ def migrate_scenario_object(data, scenario_info, override_connection_id=None, sm
     
     # Post-processing: Set custom_fields on getDealV2 modules
     # Must happen after all transformations so we can scan final references
+    entity_helpers = {}
     if 'flow' in data:
-        cf_fixed = fix_getDealV2_custom_fields(data, injection_helper_id)
+        cf_fixed, entity_helpers = fix_getDealV2_custom_fields(data, injection_helper_id)
         if cf_fixed:
             modified = True
         
-        # Inject diagnostic "Compose a String" module with all custom field mappings
-        if inject_field_map_module(data):
-            modified = True
+        # Warn about /v2/{entity}Fields/{numeric_id} URLs that need manual hash key replacement
+        field_id_warnings = warn_field_numeric_ids(data, scenario_info)
         
-    return modified, data, migration_count
+        # Inject diagnostic "Compose a String" module with all custom field mappings
+        # NOTE: Disabled for now — uncomment to inject "Pipedrive Migration Map" module
+        # if inject_field_map_module(data):
+        #     modified = True
+        
+    return modified, data, migration_count, field_id_warnings if 'flow' in data else []
 
 def migrate_blueprint(blueprint_data, connection_id=None, smart_fields=True):
     """
@@ -2548,7 +3058,7 @@ def migrate_blueprint(blueprint_data, connection_id=None, smart_fields=True):
     blueprint = blueprint_data.get('blueprint', blueprint_data)
     
     # Step 1: Standard module migration (v1 -> v2)
-    modified, transformed, count = migrate_scenario_object(
+    modified, transformed, count, field_id_warnings = migrate_scenario_object(
         blueprint, 
         'API_Request',
         override_connection_id=connection_id,
@@ -2566,10 +3076,24 @@ def migrate_blueprint(blueprint_data, connection_id=None, smart_fields=True):
     if person_modified:
         modified = True
     
+    # Build unique field ID warnings for display
+    unique_warnings = []
+    seen = set()
+    for entity_key, numeric_id, mod_id in field_id_warnings:
+        key = (entity_key, numeric_id)
+        if key not in seen:
+            seen.add(key)
+            unique_warnings.append({
+                'url': f'/v2/{entity_key}/{numeric_id}',
+                'module_id': mod_id,
+                'message': f'Replace numeric ID {numeric_id} with the field hash key (field_code) from Pipedrive Settings > Data Fields'
+            })
+    
     stats = {
         'modules_migrated': count,
         'person_modules_injected': person_count,
-        'connection_id': connection_id if connection_id else 'preserved'
+        'connection_id': connection_id if connection_id else 'preserved',
+        'field_id_warnings': unique_warnings
     }
     
     return modified, transformed, stats
