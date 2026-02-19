@@ -129,12 +129,32 @@ def migrate():
         json_bytes = json.dumps(migrated_data, indent=4, ensure_ascii=False).encode('utf-8')
         json_io = io.BytesIO(json_bytes)
         
-        return send_file(
+        response = send_file(
             json_io,
             mimetype='application/json',
             as_attachment=True,
             download_name=output_filename
         )
+        
+        # Add field ID warnings as custom header for the frontend
+        field_warnings = stats.get('field_id_warnings', [])
+        trigger_warnings = stats.get('trigger_warnings', [])
+        exposed_headers = []
+        
+        if field_warnings:
+            import urllib.parse
+            response.headers['X-Field-Warnings'] = urllib.parse.quote(json.dumps(field_warnings, ensure_ascii=False))
+            exposed_headers.append('X-Field-Warnings')
+        
+        if trigger_warnings:
+            import urllib.parse
+            response.headers['X-Trigger-Warnings'] = urllib.parse.quote(json.dumps(trigger_warnings, ensure_ascii=False))
+            exposed_headers.append('X-Trigger-Warnings')
+        
+        if exposed_headers:
+            response.headers['Access-Control-Expose-Headers'] = ', '.join(exposed_headers)
+        
+        return response
         
     except Exception as e:
         traceback.print_exc()

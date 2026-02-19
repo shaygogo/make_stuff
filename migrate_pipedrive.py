@@ -106,6 +106,34 @@ PIPEDRIVE_MODULE_UPGRADES = {
     'pipedrive:listPipelineDeals': 'pipedrive:listDealsV2',
     'pipedrive:ListStageDeals': 'pipedrive:listDealsV2',
     'pipedrive:listStageDeals': 'pipedrive:listDealsV2',
+
+    # Trigger / Watch Modules (V1 → V2)
+    # Polling triggers
+    'pipedrive:watchDeals': 'pipedrive:watchDealsV2',
+    'pipedrive:WatchDeals': 'pipedrive:watchDealsV2',
+    'pipedrive:watchPersons': 'pipedrive:watchPersonsV2',
+    'pipedrive:WatchPersons': 'pipedrive:watchPersonsV2',
+    'pipedrive:watchOrganizations': 'pipedrive:watchOrganizationsV2',
+    'pipedrive:WatchOrganizations': 'pipedrive:watchOrganizationsV2',
+    'pipedrive:watchActivities': 'pipedrive:watchActivitiesV2',
+    'pipedrive:WatchActivities': 'pipedrive:watchActivitiesV2',
+    'pipedrive:watchProducts': 'pipedrive:watchProductsV2',
+    'pipedrive:WatchProducts': 'pipedrive:watchProductsV2',
+    # Instant triggers (webhook-based)
+    'pipedrive:WatchNewEvents': 'pipedrive:watchNewEvents',
+    'pipedrive:watchNewEvents': 'pipedrive:watchNewEvents',
+    'pipedrive:NewDealEvent': 'pipedrive:watchNewEvents',
+    'pipedrive:newDealEvent': 'pipedrive:watchNewEvents',
+    'pipedrive:NewPersonEvent': 'pipedrive:watchNewEvents',
+    'pipedrive:newPersonEvent': 'pipedrive:watchNewEvents',
+    'pipedrive:NewOrganizationEvent': 'pipedrive:watchNewEvents',
+    'pipedrive:newOrganizationEvent': 'pipedrive:watchNewEvents',
+    'pipedrive:NewActivityEvent': 'pipedrive:watchNewEvents',
+    'pipedrive:newActivityEvent': 'pipedrive:watchNewEvents',
+    'pipedrive:NewNoteEvent': 'pipedrive:watchNewEvents',
+    'pipedrive:newNoteEvent': 'pipedrive:watchNewEvents',
+    'pipedrive:NewProductEvent': 'pipedrive:watchNewEvents',
+    'pipedrive:newProductEvent': 'pipedrive:watchNewEvents',
 }
 
 # Modules that don't have a direct v2 equivalent and must use MakeAPICallV2
@@ -214,6 +242,10 @@ DEAL_MODULE_NAMES = [
     'pipedrive:DeleteDeal', 'pipedrive:deleteDeal', 'pipedrive:deleteDealV2',
     'pipedrive:ListDealsForProduct', 'pipedrive:listDealsForProductV2',
     'pipedrive:listDealsForPerson', 'pipedrive:listDealsForPersonV2',
+    # Triggers
+    'pipedrive:watchDeals', 'pipedrive:WatchDeals', 'pipedrive:watchDealsV2',
+    'pipedrive:NewDealEvent', 'pipedrive:newDealEvent',
+    'pipedrive:WatchNewEvents', 'pipedrive:watchNewEvents', 'pipedrive:watchNewEvents',
 ]
 
 # V2 Breaking Change: Person field renames
@@ -237,6 +269,9 @@ PERSON_MODULE_NAMES = [
     'pipedrive:UpdatePerson', 'pipedrive:updatePerson',
     'pipedrive:SearchPersons', 'pipedrive:searchPersons',
     'pipedrive:ListPersons', 'pipedrive:listPersons',
+    # Triggers
+    'pipedrive:watchPersons', 'pipedrive:WatchPersons', 'pipedrive:watchPersonsV2',
+    'pipedrive:NewPersonEvent', 'pipedrive:newPersonEvent',
 ]
 
 # V2 Breaking Change: Organization field renames
@@ -253,6 +288,9 @@ ORG_MODULE_NAMES = [
     'pipedrive:UpdateOrganization', 'pipedrive:updateOrganization',
     'pipedrive:SearchOrganizations', 'pipedrive:searchOrganizations', 'pipedrive:searchOrganizationsV2',
     'pipedrive:ListOrganizations', 'pipedrive:listOrganizations',
+    # Triggers
+    'pipedrive:watchOrganizations', 'pipedrive:WatchOrganizations', 'pipedrive:watchOrganizationsV2',
+    'pipedrive:NewOrganizationEvent', 'pipedrive:newOrganizationEvent',
 ]
 
 # V2 Breaking Change: Activity field renames
@@ -272,6 +310,9 @@ ACTIVITY_MODULE_NAMES = [
     'pipedrive:ListActivityPersons', 'pipedrive:listActivityPersons',
     'pipedrive:ListActivityOrganizations', 'pipedrive:listActivityOrganizations',
     'pipedrive:ListActivities', 'pipedrive:listActivities',
+    # Triggers
+    'pipedrive:watchActivities', 'pipedrive:WatchActivities', 'pipedrive:watchActivitiesV2',
+    'pipedrive:NewActivityEvent', 'pipedrive:newActivityEvent',
 ]
 
 # V2 Breaking Change: Product field renames
@@ -287,6 +328,9 @@ PRODUCT_MODULE_NAMES = [
     'pipedrive:DeleteProduct', 'pipedrive:deleteProduct', 'pipedrive:deleteProductV2',
     'pipedrive:SearchProducts', 'pipedrive:searchProducts', 'pipedrive:searchProductsV2',
     'pipedrive:ListProducts', 'pipedrive:listProducts',
+    # Triggers
+    'pipedrive:watchProducts', 'pipedrive:WatchProducts', 'pipedrive:watchProductsV2',
+    'pipedrive:NewProductEvent', 'pipedrive:newProductEvent',
 ]
 
 # V2 Breaking Change: Deal Product field renames
@@ -636,7 +680,7 @@ def create_set_label_code_module(module_id, set_fields_info, source_mod_id, help
                     "name": "dependencies",
                     "type": "array",
                     "label": "Additional dependencies (Enterprise plans only)",
-                    "spec": {"type": "text", "required": True, "label": "Dependency", "validate": {"pattern": "^[A-Za-z0-9_@\\./\<\>\\=\\!~\\^+\\-]{1,214}$", "min": 1, "max": 214}, "name": "value"}
+                    "spec": {"type": "text", "required": True, "label": "Dependency", "validate": {"pattern": r"^[A-Za-z0-9_@\\./\<\>\\=\\!~\\^+\\-]{1,214}$", "min": 1, "max": 214}, "name": "value"}
                 },
                 {
                     "name": "inputFormat",
@@ -1136,9 +1180,28 @@ def upgrade_pipedrive_connection(module, filename, override_connection_id=None, 
         new_module = 'pipedrive:MakeAPICallV2'
     
     conn_id = module.get('parameters', {}).get('__IMTCONN__')
-    if not conn_id:
+    
+    # Trigger/Watch modules may not have a connection (they use webhook configs)
+    # Just swap the module name for those
+    is_trigger = any(kw in old_module.lower() for kw in ['watch', 'newevent', 'newdeal', 'newperson', 'neworganization', 'newactivity', 'newnote', 'newproduct'])
+    
+    if not conn_id and not is_trigger:
         print(f"[WARNING] [{filename}] Module {module_id} ({old_module}): No connection ID found! Skipping.")
         return False
+    
+    if not conn_id and is_trigger:
+        # Trigger module: just swap the module name, no connection or mapper changes needed
+        print(f"[{filename}] Module {module_id}: {old_module} -> {new_module} (trigger module)")
+        print(f"[!!] TRIGGER WARNING: Module {module_id} ({old_module}) was upgraded to V2.")
+        print(f"     After importing, you must set up a new webhook for this trigger in Make.com.")
+        print(f"     The old V1 webhook should be deleted from Pipedrive Settings > Webhooks.")
+        _trigger_warnings.append({
+            'module_id': module_id,
+            'old_module': old_module,
+            'new_module': new_module
+        })
+        module['module'] = new_module
+        return True
     
     print(f"[{filename}] Module {module_id}: {old_module} -> {new_module}")
     
@@ -2412,13 +2475,16 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
         # V1 had: HASH (value), HASH_currency (currency) for monetary
         #         HASH (value), HASH_timezone_id for time fields
         #         HASH (value), HASH_formatted_address, HASH_locality, etc. for address fields
+        #         HASH (value), HASH_until for date_range fields
         # V2 returns: custom_fields.HASH = {"value": N, "currency": "C"} for monetary
         #             custom_fields.HASH = {"value": "HH:MM:SS", "timezone_id": N} for time
         #             custom_fields.HASH = {"value": "addr text", "locality": "City", ...} for address
+        #             custom_fields.HASH = {"value": "start_date", "until": "end_date"} for date_range
         monetary_hashes = set()
         time_hashes = set()
         address_hashes = set()
         date_hashes = set()
+        daterange_hashes = set()
         # Note: set_hashes detection is done earlier in PASS 2 (near .label rewriting)
         interface = mod.get('metadata', {}).get('interface', [])
         if isinstance(interface, list):
@@ -2437,9 +2503,16 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
                     base_hash = fname[:-len('_formatted_address')]
                     if re.match(r'^[a-f0-9]{40}$', base_hash):
                         address_hashes.add(base_hash)
+                elif fname.endswith('_until'):
+                    base_hash = fname[:-len('_until')]
+                    if re.match(r'^[a-f0-9]{40}$', base_hash):
+                        daterange_hashes.add(base_hash)
                 # Detect date-type custom fields (V2 returns date-only without 00:00 time)
                 elif ftype == 'date' and re.match(r'^[a-f0-9]{40}$', fname):
                     date_hashes.add(fname)
+        
+        # Date range fields are also date values — add to date_hashes for addHours() wrapping
+        date_hashes |= daterange_hashes
         
         # Rewrite companion references BEFORE flat-to-nested rewrite
         # Monetary: MOD.HASH_currency -> MOD.custom_fields.HASH.currency
@@ -2481,6 +2554,16 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
                         print(f"[INFO] Module {mod_id}: Rewrote address {suffix} companion for {h[:12]}...")
                         fixed_any = True
         
+        # Date range: MOD.HASH_until -> MOD.custom_fields.HASH.until
+        for h in daterange_hashes:
+            for old in [f'{mod_id}.`{h}_until`', f'{mod_id}.{h}_until',
+                        f'{mod_id}.customRaw.`{h}_until`', f'{mod_id}.customRaw.{h}_until',
+                        f'{mod_id}.custom_fields.`{h}_until`', f'{mod_id}.custom_fields.{h}_until']:
+                if old in blueprint_str:
+                    blueprint_str = blueprint_str.replace(old, f'{mod_id}.custom_fields.`{h}`.until')
+                    print(f"[INFO] Module {mod_id}: Rewrote date range _until companion for {h[:12]}...")
+                    fixed_any = True
+        
         # Find all 40-char hex hashes referenced from this module (flat refs)
         pattern = rf'(?<!\w){mod_id}\.(?!custom_fields\.)(`?)([a-f0-9]{{40}})(`?)'
         flat_matches = re.findall(pattern, blueprint_str)
@@ -2521,14 +2604,14 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
                 print(f"[INFO] getDealV2 Module {mod_id}: Rewrote {len(flat_matches)} flat references to custom_fields.HASH")
             
             # Now append .value for monetary/time/address fields (only on standalone refs)
-            object_hashes = monetary_hashes | time_hashes | address_hashes
+            object_hashes = monetary_hashes | time_hashes | address_hashes | daterange_hashes
             for h in object_hashes:
                 if h in all_hashes:
                     # Match: MOD.custom_fields.`HASH` or MOD.custom_fields.HASH 
                     # but NOT already followed by a known subfield
-                    value_pattern = rf'({mod_id}\.custom_fields\.`?{h}`?)(?!\.(value|currency|timezone_id|timezone_name|label|formatted_address|street_number|route|sublocality|locality|admin_area_level_1|admin_area_level_2|country|postal_code|subpremise))'
+                    value_pattern = rf'({mod_id}\.custom_fields\.`?{h}`?)(?!`?\.(?:value|currency|timezone_id|timezone_name|label|formatted_address|street_number|route|sublocality|locality|admin_area_level_1|admin_area_level_2|country|postal_code|subpremise|until))'
                     blueprint_str = re.sub(value_pattern, rf'\g<1>.value', blueprint_str)
-                    field_type = "monetary" if h in monetary_hashes else ("time" if h in time_hashes else "address")
+                    field_type = "monetary" if h in monetary_hashes else ("time" if h in time_hashes else ("address" if h in address_hashes else "date_range"))
                     print(f"[INFO] Module {mod_id}: Appended .value for {field_type} field {h[:12]}...")
             
             # Wrap date custom field refs with addHours(REF; 0) to restore 00:00 time component
@@ -2537,7 +2620,7 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
                 if h in all_hashes:
                     # Match: MOD.custom_fields.`HASH` or MOD.custom_fields.HASH
                     # but NOT already wrapped in addHours(...)
-                    date_pattern = rf'(?<!addHours\()({mod_id}\.custom_fields\.`?{h}`?)(?!\.)'
+                    date_pattern = rf'(?<!addHours\()({mod_id}\.custom_fields\.`?{h}`?(?:\.value)?)(?!`?\.)'
                     new_str = blueprint_str
                     new_str = re.sub(date_pattern, rf'addHours(\g<1>; 0)', new_str)
                     if new_str != blueprint_str:
@@ -2613,20 +2696,20 @@ def fix_getDealV2_custom_fields(blueprint_data, injection_helper_id=None):
                     )
             
             # Append .value for monetary/time/address fields in batch case
-            object_hashes = monetary_hashes | time_hashes | address_hashes
+            object_hashes = monetary_hashes | time_hashes | address_hashes | daterange_hashes
             for h in object_hashes:
                 if h in all_hashes:
                     target = hash_to_target[h]
-                    value_pattern = rf'({target}\.custom_fields\.`?{h}`?)(?!\.(value|currency|timezone_id|timezone_name|label|formatted_address|street_number|route|sublocality|locality|admin_area_level_1|admin_area_level_2|country|postal_code|subpremise))'
+                    value_pattern = rf'({target}\.custom_fields\.`?{h}`?)(?!`?\.(?:value|currency|timezone_id|timezone_name|label|formatted_address|street_number|route|sublocality|locality|admin_area_level_1|admin_area_level_2|country|postal_code|subpremise|until))'
                     blueprint_str = re.sub(value_pattern, rf'\g<1>.value', blueprint_str)
-                    field_type = "monetary" if h in monetary_hashes else ("time" if h in time_hashes else "address")
+                    field_type = "monetary" if h in monetary_hashes else ("time" if h in time_hashes else ("address" if h in address_hashes else "date_range"))
                     print(f"[INFO] Module {mod_id}: Appended .value for {field_type} field {h[:12]}... (batch target: {target})")
             
             # Wrap date custom field refs with addHours() in batch case
             for h in date_hashes:
                 if h in all_hashes:
                     target = hash_to_target[h]
-                    date_pattern = rf'(?<!addHours\()({target}\.custom_fields\.`?{h}`?)(?!\.)'
+                    date_pattern = rf'(?<!addHours\()({target}\.custom_fields\.`?{h}`?(?:\.value)?)(?!`?\.)'
                     new_str = blueprint_str
                     new_str = re.sub(date_pattern, rf'addHours(\g<1>; 0)', new_str)
                     if new_str != blueprint_str:
@@ -3039,6 +3122,9 @@ def migrate_scenario_object(data, scenario_info, override_connection_id=None, sm
         
     return modified, data, migration_count, field_id_warnings if 'flow' in data else []
 
+# Module-level list to track trigger migrations for web UI warnings
+_trigger_warnings = []
+
 def migrate_blueprint(blueprint_data, connection_id=None, smart_fields=True):
     """
     Programmatic interface for migrating a blueprint.
@@ -3058,6 +3144,8 @@ def migrate_blueprint(blueprint_data, connection_id=None, smart_fields=True):
     blueprint = blueprint_data.get('blueprint', blueprint_data)
     
     # Step 1: Standard module migration (v1 -> v2)
+    _trigger_warnings.clear()
+    
     modified, transformed, count, field_id_warnings = migrate_scenario_object(
         blueprint, 
         'API_Request',
@@ -3093,7 +3181,8 @@ def migrate_blueprint(blueprint_data, connection_id=None, smart_fields=True):
         'modules_migrated': count,
         'person_modules_injected': person_count,
         'connection_id': connection_id if connection_id else 'preserved',
-        'field_id_warnings': unique_warnings
+        'field_id_warnings': unique_warnings,
+        'trigger_warnings': list(_trigger_warnings)
     }
     
     return modified, transformed, stats

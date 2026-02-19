@@ -332,6 +332,45 @@
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
 
+                // Check for warnings
+                let allWarnings = '';
+
+                // Field ID warnings
+                const warningsHeader = response.headers.get('X-Field-Warnings');
+                if (warningsHeader) {
+                    try {
+                        const warnings = JSON.parse(decodeURIComponent(warningsHeader));
+                        if (warnings.length > 0) {
+                            allWarnings += '⚠️ <strong>Manual Fix Required</strong> — The following field URLs use numeric IDs that must be replaced with hash keys:<br><br>';
+                            warnings.forEach(w => {
+                                allWarnings += `<code>${w.url}</code> (Module ${w.module_id})<br>`;
+                                allWarnings += `<span class="text-xs opacity-75">${w.message}</span><br><br>`;
+                            });
+                        }
+                    } catch (e) { /* ignore parse errors */ }
+                }
+
+                // Trigger warnings
+                const triggerHeader = response.headers.get('X-Trigger-Warnings');
+                if (triggerHeader) {
+                    try {
+                        const triggers = JSON.parse(decodeURIComponent(triggerHeader));
+                        if (triggers.length > 0) {
+                            allWarnings += '🔔 <strong>Webhook Setup Required</strong> — The following trigger modules were upgraded to V2:<br><br>';
+                            triggers.forEach(t => {
+                                allWarnings += `<code>${t.old_module}</code> → <code>${t.new_module}</code> (Module ${t.module_id})<br>`;
+                            });
+                            allWarnings += '<br><span class="text-xs opacity-75">After importing, open the trigger module in Make.com and create a new webhook. The old V1 webhook should be deleted from Pipedrive Settings → Webhooks.</span><br>';
+                        }
+                    } catch (e) { /* ignore parse errors */ }
+                }
+
+                if (allWarnings) {
+                    allWarnings += '<br>File downloaded successfully, but please complete the manual steps above after importing.';
+                    showMessage(allWarnings, 'warning');
+                    return;
+                }
+
                 showMessage('Migration successful! Your file has been downloaded.', 'success');
             } catch (error) {
                 showMessage(`Error: ${error.message}`, 'error');
@@ -343,22 +382,26 @@
             }
         });
 
+        let messageTimeout = null;
         function showMessage(text, type) {
-            message.textContent = text;
-            message.classList.remove('hidden', 'bg-red-500/10', 'text-red-400', 'border-red-500/20', 'bg-green-500/10', 'text-green-400', 'border-green-500/20');
+            if (messageTimeout) { clearTimeout(messageTimeout); messageTimeout = null; }
+            message.innerHTML = text;
+            message.classList.remove('hidden', 'bg-red-500/10', 'text-red-400', 'border-red-500/20', 'bg-green-500/10', 'text-green-400', 'border-green-500/20', 'bg-amber-500/10', 'text-amber-400', 'border-amber-500/20');
 
             if (type === 'error') {
                 message.classList.add('bg-red-500/10', 'text-red-400', 'border', 'border-red-500/20');
+            } else if (type === 'warning') {
+                message.classList.add('bg-amber-500/10', 'text-amber-400', 'border', 'border-amber-500/20');
             } else {
                 message.classList.add('bg-green-500/10', 'text-green-400', 'border', 'border-green-500/20');
             }
 
             message.classList.remove('hidden');
 
-            // Auto-hide success messages after 5 seconds
             if (type === 'success') {
-                setTimeout(() => {
+                messageTimeout = setTimeout(() => {
                     message.classList.add('hidden');
+                    messageTimeout = null;
                 }, 5000);
             }
         }

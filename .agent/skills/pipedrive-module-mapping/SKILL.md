@@ -42,6 +42,30 @@ This skill maintains the mapping rules for converting Legacy v1 modules to API v
 - The module appears in the V2_GET_MODULES set for `include_fields`/`custom_fields` processing
 - Interface metadata is preserved for companion field detection
 
+### Trigger / Watch Module Mappings
+V1 Pipedrive trigger modules are mapped to their V2 equivalents. Triggers don't have `__IMTCONN__` connections (they use webhook configs), so the migration **only swaps the module name** — no connection or mapper changes.
+
+| V1 Module | V2 Module | Type | Confirmed? |
+| :--- | :--- | :--- | :--- |
+| `watchDeals` / `WatchDeals` | `watchDealsV2` | Polling | ✅ From real blueprint |
+| `watchPersons` / `WatchPersons` | `watchPersonsV2` | Polling | Follows pattern |
+| `watchOrganizations` / `WatchOrganizations` | `watchOrganizationsV2` | Polling | Follows pattern |
+| `watchActivities` / `WatchActivities` | `watchActivitiesV2` | Polling | ✅ From real blueprint |
+| `watchProducts` / `WatchProducts` | `watchProductsV2` | Polling | Follows pattern |
+| `NewDealEvent` | `watchNewEvents` | Instant (webhook) | ✅ From real blueprint |
+| `NewPersonEvent` | `watchNewEvents` | Instant (webhook) | ✅ From real blueprint |
+| `NewOrganizationEvent` | `watchNewEvents` | Instant (webhook) | Follows pattern |
+| `NewActivityEvent` | `watchNewEvents` | Instant (webhook) | Follows pattern |
+| `NewNoteEvent` | `watchNewEvents` | Instant (webhook) | Follows pattern |
+| `NewProductEvent` | `watchNewEvents` | Instant (webhook) | Follows pattern |
+| `WatchNewEvents` | `watchNewEvents` | Instant (webhook) | ✅ From real blueprint |
+
+**Webhook Warning**: After importing a migrated trigger, the user must **create a new webhook** in Make.com. The old V1 webhook should be deleted from Pipedrive Settings → Webhooks. This warning is shown in both the CLI output and the web UI.
+
+**Field Renames on Triggers**: Trigger module names are included in the entity module name lists (`DEAL_MODULE_NAMES`, etc.) so that V1→V2 field renames are correctly applied to trigger output references.
+
+**`current` → `data` NOT needed**: Make.com's dedicated Pipedrive triggers unwrap the webhook payload internally. Downstream refs use `{{4.name}}` not `{{4.current.name}}`.
+
 ## 2. Generic API Call Replacements (MakeAPICallV2)
 Modules that do not have a direct V2 equivalent in Make.com are converted to `pipedrive:MakeAPICallV2` using the following routes:
 
@@ -147,6 +171,8 @@ These V2 changes are documented but not automated due to risk/complexity:
 - **Multiple-option fields**: Comma-separated string `"123,456"` → integer array `[123,456]`. Requires knowing field type at migration time.
 - **Date/time range `_until` companion**: New subfield for date range and time range custom fields.
 - **Fields API renames**: `key`→`field_code`, `name`→`field_name`, `edit_flag`→`is_custom_field`. Only matters if scenarios use field management modules.
+- **Subscription modules**: 7 deprecated V1 modules (recurring/installment subscriptions) have no V2 replacement in Make.com.
+- **List Persons in a Deal**: Deprecated V1 module — may need manual migration to V2 Participants endpoint.
 
 ### GET-based Generic Replacements (CRITICAL)
 - When a module is converted to `MakeAPICallV2` with method `GET`, the **original mapper parameters must be preserved as query string (`qs`)** items.

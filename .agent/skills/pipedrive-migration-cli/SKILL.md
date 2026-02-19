@@ -37,7 +37,15 @@ Migrated blueprints are saved to the `./migrated_scenarios/` directory with the 
 5. **Diagnostic Injection**: `inject_field_map_module()` adds a "Compose a String" module showing all Pipedrive field mappings.
 6. **Save**: The script writes the new structure to disk.
 7. **Manual Upload**: The user must manually upload the migrated blueprint to Make.com.
-    - *Note*: Webhook URLs are preserved during manual upload.
+    - *Note*: Webhook URLs are NOT preserved for trigger modules — user must create new webhooks.
+
+### Trigger Module Handling
+Trigger modules (polling `watchDeals` and instant `NewDealEvent` etc.) are handled specially:
+- **No `__IMTCONN__`**: Triggers use webhook configs, not API connections. The migration only swaps the module name.
+- **Webhook re-registration required**: After import, the user must create a new webhook in Make.com and delete the old V1 webhook from Pipedrive Settings → Webhooks.
+- **CLI output**: Prints `[!!] TRIGGER WARNING` with instructions.
+- **Web UI**: Sends `X-Trigger-Warnings` header → frontend displays 🔔 amber warning with module details.
+- **Tracking**: `_trigger_warnings` module-level list, cleared at start of each `migrate_blueprint()` call, included in stats dict.
 
 ## 4. Batch Migration (`batch_migrate_customer.py`)
 Automates migration across an entire Make.com account using the API.
@@ -93,7 +101,9 @@ When creating scenarios via `POST /scenarios`, the following are mandatory:
 ## 5. Known Limitations
 - **Manual Step**: Automating the upload back to Make.com is excluded for safety reasons (web server mode).
 - **Verification**: Post-migration, the user should open the scenario in the Make.com UI to ensure mappings are visible and valid.
-- **Webhook Reconnection**: After batch API creation, webhook triggers in new scenarios need to be manually reconnected by the user.
+- **Webhook Reconnection**: After migration (manual or batch API), **trigger modules need new webhooks**. The old V1 webhook won't work with V2 triggers. This applies to both polling triggers (`watchDealsV2`) and instant triggers (`watchNewEvents`).
+- **Subscription Modules**: 7 deprecated V1 subscription modules have no V2 replacement in Make.com.
+- **List Persons in a Deal**: Deprecated V1 module — may need manual migration.
 
 ## 6. Learned Patterns
 
@@ -175,3 +185,61 @@ To avoid confusion during batch processing or manual fixes, use the following na
 - `original_name_v2_migrated.json`: The output of this tool.
 - `original_name (before).json`: Often used in local testing to denote the source.
 - `original_name (after).json`: Often used in local testing to denote the manually fixed or previously migrated version.
+
+## 11. Agent Operational Gotchas (Windows/PowerShell)
+
+These are recurring pitfalls when working on this codebase. Read these BEFORE starting work.
+
+### PowerShell Inline Python Escaping
+PowerShell mangles quotes, backslashes, and special chars in `python -c "..."` one-liners. **Write a temp `.py` script file instead** whenever the code contains:
+- Backslashes (regex patterns, file paths)
+- Nested quotes (JSON strings, f-strings)
+- Hebrew/Unicode characters
+- Multi-line logic
+
+```powershell
+# ❌ BAD — will break on backslashes and quotes
+python -c "import re; print(re.sub(r'\\d+', 'X', 'abc123'))"
+
+# ✅ GOOD — write to file, run, delete
+# 1. Write script with write_to_file tool
+# 2. python temp_script.py
+# 3. Remove-Item temp_script.py
+```
+
+### Grep/Search Encoding Issues
+Blueprint files contain **Hebrew text and escaped Unicode**. `grep_search` and `ripgrep` may return no results on files that clearly contain the search term. When this happens:
+- **Use `view_file`** to read the file directly and search visually
+- **Use Python** to search: `python -c "print('term' in open('file.json', encoding='utf-8').read())"`
+- The issue is usually BOM markers or mixed encoding in the JSON files
+
+### File Editing with Escaped Characters
+`replace_file_content` and `multi_replace_file_content` require **exact string matching**. This fails on lines containing:
+- Unicode escapes (`\u003c`, `\u003e` displayed by the viewer but stored as `<`, `>`)
+- Heavy backslash escaping (regex patterns)
+- Hebrew characters that the viewer renders differently
+
+**Workaround**: Use a Python script to do the replacement:
+```python
+with open('file.py', 'r', encoding='utf-8') as f:
+    content = f.read()
+content = content.replace('old_exact_string', 'new_string', 1)
+with open('file.py', 'w', encoding='utf-8') as f:
+    f.write(content)
+```
+
+### PowerShell Output Truncation
+Long output from `python migrate_pipedrive.py` gets garbled in PowerShell due to overlapping stderr/stdout streams. To capture clean output:
+- **Pipe through `Select-Object`**: `python script.py 2>&1 | Select-Object -First 30`
+- **Use `Select-String`** to filter specific lines: `python script.py 2>&1 | Select-String "WARNING|ERROR"`
+- **Redirect to file**: `python script.py > output.txt 2>&1` then read the file
+
+### Blueprint JSON Files Are Large
+`migrate_pipedrive.py` is ~3300 lines and blueprint JSON files can be 10K+ lines. When exploring:
+- Use `view_file_outline` first to get the structure
+- Use `grep_search` to find specific functions/patterns
+- Use `view_code_item` for individual functions
+- Don't try to `view_file` the entire file — use line ranges
+
+### Flask Dev Server Auto-Reload
+The Flask app runs with `debug=True`, so it auto-reloads when `migrate_pipedrive.py` or `app.py` changes. No need to restart manually. But if the server is NOT running, you must start it with `python app.py` before testing the web UI.
